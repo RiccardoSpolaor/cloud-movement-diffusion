@@ -36,7 +36,7 @@ class CloudDataset:
         # Compoe the transformations.
         self.transforms = T.Compose(transforms)
         # Get the data.
-        self.data = self.get_data(files, num_frames, scale)
+        self.data = self.get_data(files, num_frames, scale, img_size)
 
 #    def _calculate_mean_std(self, array: np.ndarray) -> None:
 #        """Compute the mean and standard deviation of an array and append them
