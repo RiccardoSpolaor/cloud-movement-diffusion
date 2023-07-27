@@ -38,14 +38,32 @@ class CloudDataset:
         # Get the data.
         self.data = self.get_data(files, num_frames, scale)
 
-    def _calculate_mean_std(self, array: np.ndarray):
-        "Calculate mean and std for normalization"
-        mean, std = array.mean(), array.std()
-        self.means.append(mean)
-        self.stds.append(std)
+#    def _calculate_mean_std(self, array: np.ndarray) -> None:
+#        """Compute the mean and standard deviation of an array and append them
+#        to the corresponding lists.
+#
+#        Parameters
+#        ----------
+#        array : np.ndarray
+#            The array to compute the mean and standard deviation of.
+#        """
+#        mean, std = array.mean(), array.std()
+#        self.means.append(mean)
+#        self.stds.append(std)
 
     @staticmethod
     def _resize_and_transpose(array: np.ndarray, img_size: int) -> np.ndarray:
+        """
+        Resize an array to the desired size and transpose it to the
+        given image size.
+        
+        Parameters
+        ----------
+        array : np.ndarray
+            The array to resize and transpose.
+        img_size : int
+            The size of the image to transpose the array to.
+        """
         # Get the number of events and frames.
         num_events, num_frames = array.shape[0], array.shape[3]
         # Set an empty array to store the resized and transposed array.
@@ -56,7 +74,23 @@ class CloudDataset:
         # Transpose the array to shape (num_events, num_frames, img_size, img_size).
         return resized_array.transpose((0, 3, 1, 2))
 
-    def load_channel(self, file_path: str, scale: bool = True):
+    def load_channel(self, file_path: str, scale: bool = True) -> np.ndarray:
+        """Load a single channel from a numpy file and apply min-max
+        scaling to it.
+
+        Parameters
+        ----------
+        file_path : str
+            The file path of the numpy file to load.
+        scale : bool, optional
+            Whether to scale or not the channel through min-max,
+            by default True.
+
+        Returns
+        -------
+        ndarray
+            The scaled channel.
+        """
         one_channel = np.load(file_path)
         one_channel = one_channel.astype(np.float32)
         if scale:
@@ -64,7 +98,21 @@ class CloudDataset:
             # self._calculate_mean_std(one_channel)
         return one_channel
 
-    def create_windows(self, data, num_frames):
+    def create_windows(self, data: np.ndarray, num_frames: int) -> np.ndarray:
+        """Create windows of consecutive frames from the data.
+
+        Parameters
+        ----------
+        data : ndarray
+            The data to create windows from.
+        num_frames : int
+            The number of consecutive frames to stack.
+
+        Returns
+        -------
+        ndarray
+            The windows of consecutive frames.
+        """
         windows = []
         for event in data:
             wds = np.lib.stride_tricks.sliding_window_view(
@@ -85,7 +133,21 @@ class CloudDataset:
         scale: bool,
         img_size: int
         ) -> np.ndarray:
-        "Loads all data into a single array self.data"
+        """
+        Load all data channels from the given files and stack them
+        into a single array.
+        
+        Parameters
+        ----------
+        files : list of str
+            The list of files to load.
+        num_frames : int
+            The number of consecutive frames to stack.
+        scale : bool
+            Whether to scale or not the channels through min-max.
+        img_size : int
+            The size of the image to transpose the array to.
+        """
         channels = []
         # Stack all information channels into a single array.
         for file in progress_bar(files, leave=False):
@@ -181,8 +243,21 @@ class CloudDataset:
 
 # TODO: MAKE SURE THAT WHEN DOWNLOADING THE DATASET WE DON'T PUT VALIDATION FRAMES
 # IN THE TRAINING DATASET
-def download_dataset(at_name, project_name):
-    "Downloads dataset from wandb artifact"
+def download_dataset(at_name: str, project_name: str) -> List[str]:
+    """Download the dataset from wandb.
+
+    Parameters
+    ----------
+    at_name : str
+        The name of the artifact to download.
+    project_name : str
+        The name of the project to download the artifact from.
+    
+    Returns
+    -------
+    list of str
+        The list of files in the downloaded dataset.
+    """
     def _get_dataset(run):
         artifact = run.use_artifact(at_name, type='dataset')
         return artifact.download()
