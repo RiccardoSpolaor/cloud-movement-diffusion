@@ -8,7 +8,7 @@ from diffusers.schedulers import DDIMScheduler
 from .model import UNet2D
 
 @torch.no_grad()
-def diffusers_sampler(
+def _diffusers_sampler(
     model: UNet2D,
     past_frames: torch.FloatTensor,
     sched: DDIMScheduler,
@@ -79,4 +79,4 @@ def ddim_sampler(
     # Set the number of timesteps.
     ddim_sched.set_timesteps(steps)
     # Get the partial function for the diffusers sampler.
-    return partial(diffusers_sampler, sched=ddim_sched, eta=eta)
+    return partial(_diffusers_sampler, sched=ddim_sched, eta=eta)
