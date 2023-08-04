@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import List
 
 from fastprogress import progress_bar
@@ -6,6 +7,7 @@ import torch
 import torchvision.transforms as T
 import wandb
 import cv2
+import os
 
 # from pathlib import Path
 
@@ -241,6 +243,17 @@ class CloudDataset:
         """
         np.save(file_name, self.data)
 
+
+def inspect_data(file_path: Path) -> None:
+    data = np.load(file_path)
+    print("Loaded data size:", data.size)
+    if data.size > 1000000000:
+        chunks = np.split(data, 2, axis=0)
+        for i,c in enumerate(chunks):
+            print("chunk shape:", c.shape)
+            np.save(file_path[:-4]+f'_{i}.npy',c)
+        os.remove(file_path)
+
 # TODO: MAKE SURE THAT WHEN DOWNLOADING THE DATASET WE DON'T PUT VALIDATION FRAMES
 # IN THE TRAINING DATASET
 def download_dataset(at_name: str, project_name: str) -> List[str]:
@@ -270,7 +283,7 @@ def download_dataset(at_name: str, project_name: str) -> List[str]:
         artifact_dir = _get_dataset(run)
         run.finish()
 
-    files = sorted(list(artifact_dir.iterdir()))
+    files = sorted(list(Path(artifact_dir).iterdir()))
+    _ = list(map(inspect_data, files))
 
-    # ls(Path(artifact_dir))
     return files
