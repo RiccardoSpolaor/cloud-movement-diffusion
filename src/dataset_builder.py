@@ -244,15 +244,30 @@ class CloudDataset:
         np.save(file_name, self.data)
 
 
-def inspect_data(file_path: Path) -> None:
-    data = np.load(file_path)
-    print("Loaded data size:", data.size)
-    if data.size > 1000000000:
-        chunks = np.split(data, 2, axis=0)
-        for i,c in enumerate(chunks):
-            print("chunk shape:", c.shape)
-            np.save(file_path[:-4]+f'_{i}.npy',c)
-        os.remove(file_path)
+def inspect_data(file_path: List[Path]) -> None:
+    """Inspect the data in the given file path for big files and split them.
+
+    Parameters  
+    ----------
+    file_path : List[Path]
+        The list of files to inspect.
+    Returns
+    -------
+    files : List[Path]
+    Refined file path
+
+    """
+    files = file_path
+    for file in files:
+        if (data := np.load(file)).size > 1000000000 :
+            chunks = np.split(data, 2, axis=0)
+            for i,c in enumerate(chunks):
+                #print("chunk shape:", c.shape)
+                np.save(str(file)[:-4]+f'_{i}.npy',c)
+            os.remove(file)
+            files.remove(file)
+            del data
+    return files
 
 # TODO: MAKE SURE THAT WHEN DOWNLOADING THE DATASET WE DON'T PUT VALIDATION FRAMES
 # IN THE TRAINING DATASET
@@ -284,6 +299,4 @@ def download_dataset(at_name: str, project_name: str) -> List[str]:
         run.finish()
 
     files = sorted(list(Path(artifact_dir).iterdir()))
-    _ = list(map(inspect_data, files))
-
-    return files
+    return  inspect_data(files)
