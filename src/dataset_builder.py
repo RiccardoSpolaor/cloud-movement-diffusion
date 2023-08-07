@@ -165,6 +165,10 @@ class CloudDataset:
         # Stack all channels into a single array.
         # Shape = (num_events, num_frames, width, height).
         # TODO: Are we stacking correctly? Shouldn't we stack along the channels axis?
+
+
+        channels[-2:] = [np.concatenate(channels[-2:], axis=0)] # counter the split of big files
+
         all_channels = np.stack(channels, axis=2)
         return self.create_windows(all_channels, num_frames)
 
