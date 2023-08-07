@@ -9,10 +9,10 @@ from torch.optim import AdamW
 from torch.optim.lr_scheduler import OneCycleLR
 from torchmetrics import PeakSignalNoiseRatio, StructuralSimilarityIndexMeasure
 
-from .dataloader import NoisifyDataloader
-from .metrics import mCSI
-from .model import UNet2D
-from .wandb_utils import log_images, save_model
+from dataloader import NoisifyDataloader
+from metrics import mCSI
+from model import UNet2D
+from wandb_utils import log_images, save_model
 
 
 class MiniTrainer:
@@ -138,7 +138,8 @@ class MiniTrainer:
         # Loop over the batches.
         for batch in pbar:
             # Get the frames, the temperature and the noise.
-            frames, t, noise = self.__to_device(batch, device=self.device)
+            frames, t, noise = batch[0].to(self.device), batch[1].to(self.device), batch[2].to(self.device)  # __to_device gives weird error!
+            #self.__to_device(batch, device=self.device)
             # Squeeze the noise on the second dimension.
             noise = noise.squeeze(1)
             # Apply mixed precision on the prediction.
@@ -242,7 +243,9 @@ class MiniTrainer:
         # Prepare the pipeline.
         self.__prepare(config)
         # Get the validation past frames and target frames.
-        val_frames, _, _ = self.__to_device(self.val_batch, device=self.device)
+
+        val_frames = self.val_batch[0].to(self.device) # __to_device gives weird error!
+        #val_frames, _, _ = self.__to_device(self.val_batch, device=self.device)
         val_past_frames = val_frames[:min(config.n_preds, 1), :-self.n_predicted]  # log first prediction
         val_target_frames = val_frames[:min(config.n_preds, 1), -self.n_predicted:]  # log first prediction
 

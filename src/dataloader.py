@@ -3,7 +3,7 @@ import torch
 from torch.utils.data import DataLoader
 from torch.utils.data.dataloader import default_collate
 
-from .dataset_builder import CloudDataset
+from dataset_builder import CloudDataset
 
 
 # TODO: check if nomenclature of noise parameter is correct

@@ -3,7 +3,7 @@ from typing import Union
 import torch
 import wandb
 
-from .model import WandbModel
+from model import WandbModel
 
 
 def _to_wandb_image(image: torch.FloatTensor) -> wandb.Image:
