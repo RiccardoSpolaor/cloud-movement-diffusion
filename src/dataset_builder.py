@@ -1,3 +1,4 @@
+import pickle
 from pathlib import Path
 from typing import List
 
@@ -26,7 +27,8 @@ class CloudDataset:
         self,
         files: List[str], # list of numpy files to load (they come from the artifact)
         num_frames: int = 4, # how many consecutive frames to stack
-        scale: bool = True, # if we images to interval [-0.5, 0.5]
+        scalers: list = None, # list of scalers to apply to the channels
+        #scale: bool = True, # if we images to interval [-0.5, 0.5]
         img_size: int = 64, # resize dim, original images are big (446, 780)
         apply_deterministic_transforms: bool = False, # if True, transforms are deterministic
         ) -> None:
@@ -38,7 +40,7 @@ class CloudDataset:
         # Compoe the transformations.
         self.transforms = T.Compose(transforms)
         # Get the data.
-        self.data = self.get_data(files, num_frames, scale, img_size)
+        self.data = self.get_data(files, num_frames, scalers, img_size)
 
 #    def _calculate_mean_std(self, array: np.ndarray) -> None:
 #        """Compute the mean and standard deviation of an array and append them
@@ -76,7 +78,7 @@ class CloudDataset:
         # Transpose the array to shape (num_events, num_frames, img_size, img_size).
         return resized_array.transpose((0, 3, 1, 2))
 
-    def load_channel(self, file_path: str, scale: bool = True) -> np.ndarray:
+    def load_channel(self, file_path: str, scaler: object) -> np.ndarray:
         """Load a single channel from a numpy file and apply min-max
         scaling to it.
 
@@ -95,8 +97,8 @@ class CloudDataset:
         """
         one_channel = np.load(file_path)
         one_channel = one_channel.astype(np.float32)
-        if scale:
-            one_channel = 0.5 - self._scale(one_channel)
+        if scaler:
+            one_channel = scaler.scale(one_channel)
             # self._calculate_mean_std(one_channel)
         return one_channel
 
@@ -132,7 +134,7 @@ class CloudDataset:
         self, 
         files: List[str],
         num_frames: int,
-        scale: bool,
+        scalers: list,
         img_size: int
         ) -> np.ndarray:
         """
@@ -152,9 +154,12 @@ class CloudDataset:
         """
         channels = []
         # Stack all information channels into a single array.
-        for file in progress_bar(files, leave=False):
+        for i, file in enumerate(progress_bar(files, leave=False)):
             # Get a single information channel.
-            channel = self.load_channel(file, scale)
+            if scalers is not None:
+                channel = self.load_channel(file, scalers[i])
+            else:
+                channel = self.load_channel(file, None)
             # Resize and transpose the array.
             resized_array = self._resize_and_transpose(channel, img_size)
             # Append the array to the list of channels.
@@ -186,7 +191,7 @@ class CloudDataset:
         self.data = self.data[idxs]
         return self
 
-    @staticmethod
+    '''@staticmethod
     def _scale(array: np.ndarray) -> np.ndarray:
         """
         Apply min-max scaling to an array in order to get values in
@@ -203,7 +208,7 @@ class CloudDataset:
             The scaled array.
         """
         min, max = array.min(), array.max()
-        return (array - min) / (max - min)
+        return (array - min) / (max - min)''';
 
     def __getitem__(self, idx: int) -> torch.FloatTensor:
         """
@@ -304,3 +309,40 @@ def download_dataset(at_name: str, project_name: str) -> List[str]:
 
     files = sorted(list(Path(artifact_dir).iterdir()))
     return  inspect_data(files)
+
+def download_scalers(at_name: str, project_name: str) -> list:
+    """Download the scaler objects from wandb.
+
+    Parameters
+    ----------
+    at_name : str
+        The name of the artifact to download.
+    project_name : str
+        The name of the project to download the artifact from.
+    
+    Returns
+    -------
+    list
+        The list of scaler objects downloaded from wandb.
+    """
+    def _get_dataset(run):
+        artifact = run.use_artifact(at_name, type='pickle')
+        return artifact.download()
+
+    if wandb.run is not None:
+        run = wandb.run
+        artifact_dir = _get_dataset(run)
+    else:
+        run = wandb.init(project=project_name, job_type='download_scalers')
+        artifact_dir = _get_dataset(run)
+        run.finish()
+
+    files = sorted(list(Path(artifact_dir).iterdir()))
+    scalers = []
+
+    for f in files:
+        with open(f, 'rb') as file:
+            scaler = pickle.load(file)
+            scalers.append(scaler)
+    
+    return scalers
