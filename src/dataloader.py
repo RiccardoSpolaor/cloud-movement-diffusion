@@ -3,8 +3,40 @@ import torch
 from torch.utils.data import DataLoader
 from torch.utils.data.dataloader import default_collate
 
-from dataset_builder import CloudDataset
+from .dataset_builder import CloudDataset
 
+
+class ValidationDataloader(DataLoader):
+    """
+    Class that loads a validation dataset.
+    """
+    def __init__(
+        self,
+        dataset: CloudDataset,
+        *args,
+        n_past_frames=3,
+        **kwargs
+        ) -> None:
+        """
+        Initialize a ValidationDataloader.
+
+        Parameters
+        ----------
+        dataset : CloudDataset
+            The dataset used to create the dataloader.
+        """
+        self.n_past_frames = n_past_frames
+        super().__init__(
+            dataset,
+            *args,
+            collate_fn=lambda b: self._collate_fn(default_collate(b)),
+            **kwargs)
+        
+    def _collate_fn(self, batch: torch.FloatTensor) -> Tuple[torch.FloatTensor, torch.FloatTensor]:
+        b, t, _, h, w = batch.shape
+        past_frames_batch = batch[:,:self.n_past_frames]
+        last_frames_batch = batch[:,self.n_past_frames:]
+        return past_frames_batch.reshape(b, -1, h, w), last_frames_batch.reshape(b, -1, h, w)
 
 # TODO: check if nomenclature of noise parameter is correct
 class NoisifyDataloader(DataLoader):

@@ -1,9 +1,9 @@
 from pathlib import Path
-from typing import Union
+from typing import Optional, Tuple, Union
 import torch
 import wandb
 
-from model import WandbModel
+from .model import WandbModel
 
 
 def _to_wandb_image(image: torch.FloatTensor) -> wandb.Image:
@@ -29,7 +29,11 @@ def _to_wandb_image(image: torch.FloatTensor) -> wandb.Image:
     # Turn the image into a wandb image.
     return wandb.Image(image)
 
-def log_images(sample_frames: torch.FloatTensor, predicted_frames: torch.FloatTensor) -> None:
+def log_images(
+    sample_frames: torch.FloatTensor,
+    predicted_frames: torch.FloatTensor,
+    scaling_values: Optional[Tuple[float, float]] = None
+    ) -> None:
     """
     Log the sampled and predicted images to wandb.
 
@@ -42,6 +46,11 @@ def log_images(sample_frames: torch.FloatTensor, predicted_frames: torch.FloatTe
     """
     # Concatenate the sampled and predicted images.
     frames = torch.cat([sample_frames, predicted_frames], dim=1)
+    # If the scaler is passed, unscale the images and
+    if scaling_values is not None:
+        min_value, max_value = scaling_values
+        frames = (frames - min_value) * 255 / (max_value - min_value)
+        frames = frames.long()
     # Convert the images to wandb images.
     wandb_frames = [_to_wandb_image(img) for img in frames]
     # Log the images to wandb.

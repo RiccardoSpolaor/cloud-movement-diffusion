@@ -9,10 +9,10 @@ from torch.optim import AdamW
 from torch.optim.lr_scheduler import OneCycleLR
 from torchmetrics import PeakSignalNoiseRatio, StructuralSimilarityIndexMeasure
 
-from dataloader import NoisifyDataloader
-from metrics import mCSI
-from model import UNet2D
-from wandb_utils import log_images, save_model
+from .dataloader import NoisifyDataloader, ValidationDataloader
+from .metrics import mCSI
+from .model import UNet2D
+from .wandb_utils import log_images, save_model
 
 
 class MiniTrainer:
@@ -62,9 +62,10 @@ class MiniTrainer:
     def __init__(
         self,
         train_dataloader: NoisifyDataloader,
-        valid_dataloader: NoisifyDataloader,
+        valid_dataloader: ValidationDataloader,
         model: UNet2D,
         sampler: Callable[[UNet2D, torch.FloatTensor], torch.FloatTensor],
+        ir069_scaler: object,
         device: str = 'cuda',
         loss_func: nn.Module = nn.MSELoss(),
         n_predicted: int = 3,
@@ -76,7 +77,7 @@ class MiniTrainer:
         ----------
         train_dataloader : NoisifyDataloader
             The dataloader for the training set.
-        valid_dataloader : NoisifyDataloader
+        valid_dataloader : ValidationDataloader
             The dataloader for the validation set.
         model : UNet2D
             The model to train.
@@ -97,6 +98,7 @@ class MiniTrainer:
         self.m_csi = mCSI().to(device)
         self.model = model.to(device)
         self.scaler = torch.cuda.amp.GradScaler()
+        self.ir069_scaler = ir069_scaler
         self.device = device
         self.sampler = sampler
         self.val_batch = next(iter(valid_dataloader))
@@ -168,7 +170,7 @@ class MiniTrainer:
             The epoch number, by default None.
         """
         # TODO: maybe the model should be in eval mode?
-        # Initialize the progress bar with the training dataloader.
+        # Initialize the progress bar with the validation dataloader.
         pbar = progress_bar(self.valid_dataloader, leave=False)
         # Initialize the metrics at 0.
         psnr_metric = 0.
@@ -243,11 +245,12 @@ class MiniTrainer:
         # Prepare the pipeline.
         self.__prepare(config)
         # Get the validation past frames and target frames.
-
-        val_frames = self.val_batch[0].to(self.device) # __to_device gives weird error!
+        # Validation is always done in the first validation loader batch for time purposes.
+        val_past_frames, val_target_frames = self.val_batch[0].to(self.device), self.val_batch[1].to(self.device) # __to_device gives weird error!
+        #print(val_past_frames.shape, val_target_frames.shape)
         #val_frames, _, _ = self.__to_device(self.val_batch, device=self.device)
-        val_past_frames = val_frames[:min(config.n_preds, 1), :-self.n_predicted]  # log first prediction
-        val_target_frames = val_frames[:min(config.n_preds, 1), -self.n_predicted:]  # log first prediction
+        #val_past_frames = val_frames[:min(config.n_preds, 1), :-self.n_predicted]  # log first prediction
+        #val_target_frames = val_frames[:min(config.n_preds, 1), -self.n_predicted:]  # log first prediction
 
         # Loop over the epochs.
         for epoch in progress_bar(range(config.epochs), total=config.epochs, leave=True):
@@ -262,7 +265,7 @@ class MiniTrainer:
             if epoch % config.log_every_epoch == 0:
                 # TODO: semi-repeated code, refactor
                 # Get the fixed validation past frames.
-                past_frames = val_past_frames
+                past_frames = val_past_frames.clone()
                 # Apply autoregressive sampling.
                 for _ in range(self.n_predicted):
                     # Predict the next frame.
@@ -289,7 +292,10 @@ class MiniTrainer:
                 # samples = self.sampler(self.model, past_frames=val_past_frames)
                 # self.one_epoch_validation(epoch)
                 # Log the model predictions on wandb.
-                log_images(val_past_frames, predictions)
+                log_images(
+                  val_target_frames[:1],
+                  predictions[:1],
+                  scaling_values=(-.5, -5))
         # Save the model on wandb amd locally.
         save_model(self.model, config.model_name)
 

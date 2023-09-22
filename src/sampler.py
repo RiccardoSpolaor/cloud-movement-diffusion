@@ -5,7 +5,7 @@ import torch
 from fastprogress import progress_bar
 from diffusers.schedulers import DDIMScheduler
 
-from model import UNet2D
+from .model import UNet2D
 
 @torch.no_grad()
 def _diffusers_sampler(
