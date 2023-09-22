@@ -172,7 +172,7 @@ class CloudDataset:
         # TODO: Are we stacking correctly? Shouldn't we stack along the channels axis?
 
 
-        channels[-2:] = [np.concatenate(channels[-2:], axis=0)] # counter the split of big files
+        # channels[-2:] = [np.concatenate(channels[-2:], axis=0)] # counter the split of big files
 
         all_channels = np.stack(channels, axis=2)
         return self.create_windows(all_channels, num_frames)
