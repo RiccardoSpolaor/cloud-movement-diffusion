@@ -12,6 +12,7 @@ def _diffusers_sampler(
     model: UNet2D,
     past_frames: torch.FloatTensor,
     sched: DDIMScheduler,
+    n_channels: int = 1,
     **kwargs
     ) -> torch.FloatTensor:
     """
@@ -36,7 +37,7 @@ def _diffusers_sampler(
     # Get the device used by the model.
     device = next(model.parameters()).device
     # Create a new frame to condition on.
-    new_frame = torch.randn_like(past_frames[:,-1:], dtype=past_frames.dtype, device=device)
+    new_frame = torch.randn_like(past_frames[:,-1*n_channels:], dtype=past_frames.dtype, device=device)
     # Store the predicted frames to an empty list.
     preds = []
     # Create a progress bar of the given timestep.
@@ -58,7 +59,8 @@ def _diffusers_sampler(
 
 def ddim_sampler(
     steps: int = 350,
-    eta: float = 1.
+    eta: float = 1.,
+    n_channels: int = 1
     ) -> Callable[[UNet2D, torch.FloatTensor], torch.FloatTensor]:
     """Get the DDIM sampler. Faster and a bit better than the built-in sampler.
 
@@ -79,4 +81,4 @@ def ddim_sampler(
     # Set the number of timesteps.
     ddim_sched.set_timesteps(steps)
     # Get the partial function for the diffusers sampler.
-    return partial(_diffusers_sampler, sched=ddim_sched, eta=eta)
+    return partial(_diffusers_sampler, sched=ddim_sched, eta=eta, n_channels=n_channels)

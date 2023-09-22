@@ -35,7 +35,7 @@ class ValidationDataloader(DataLoader):
     def _collate_fn(self, batch: torch.FloatTensor) -> Tuple[torch.FloatTensor, torch.FloatTensor]:
         b, t, _, h, w = batch.shape
         past_frames_batch = batch[:,:self.n_past_frames]
-        last_frames_batch = batch[:,self.n_past_frames:]
+        last_frames_batch = batch[:,self.n_past_frames:, :1]
         return past_frames_batch.reshape(b, -1, h, w), last_frames_batch.reshape(b, -1, h, w)
 
 # TODO: check if nomenclature of noise parameter is correct
@@ -151,7 +151,7 @@ class NoisifyDataloader(DataLoader):
         last_frame  = frames[:,-1:]
         past_frames = past_frames.reshape(b, -1, h, w) # reshape, timesteps reshaped to channels
         noise, t, e = noise_function(last_frame)
-        noise = noise[:,:,0,:,:]
+        noise = noise.reshape(b, -1, h, w)
         noise_frames = torch.cat([past_frames, noise], dim=1)
         return noise_frames, t, e
 

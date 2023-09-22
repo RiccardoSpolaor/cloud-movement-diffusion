@@ -69,6 +69,7 @@ class MiniTrainer:
         device: str = 'cuda',
         loss_func: nn.Module = nn.MSELoss(),
         n_predicted: int = 3,
+        channels_per_image: int = 1,
         ) -> None:
         """
         Initializes the MiniTrainer class.
@@ -103,6 +104,7 @@ class MiniTrainer:
         self.sampler = sampler
         self.val_batch = next(iter(valid_dataloader))
         self.n_predicted = n_predicted
+        self.channels_per_image = channels_per_image
 
     def train_step(self, loss: torch.FloatTensor) -> None:
         """
@@ -181,8 +183,8 @@ class MiniTrainer:
         for val_batch in pbar:
             # Get the past frames and the target frames.
             frames = val_batch[0].to(self.device)
-            target = frames[:,-self.n_predicted:]
-            past_frames=frames[:,:-self.n_predicted]
+            target = frames[:,-self.n_predicted*self.channels_per_image:]
+            past_frames=frames[:,:-self.n_predicted*self.channels_per_image]
             # samples = []
             # Apply autoregressive sampling.
             for _ in range(self.n_predicted):
@@ -191,15 +193,15 @@ class MiniTrainer:
                 # Add the prediction to the past frames.
                 past_frames = torch.cat([past_frames, prediction_frames], dim=1)
                 # Remove the first frame from the past frames.
-                past_frames = past_frames[:,1:]
+                past_frames = past_frames[:,1*self.channels_per_image:]
             # Get the predicted frames by cutting the last n_predicted frames.
-            predictions = past_frames[:,-self.n_predicted:]
+            predictions = past_frames[:,-self.n_predicted*self.channels_per_image:]
 
             # Compute the metrics on the predicted frames and the target frames.
-            psnr_metric += self.psnr(predictions, target).float().cpu()
-            ssmi_metric += self.ssim(predictions, target).float().cpu()
-            mse_metric += self.loss_func(predictions, target).float().cpu()
-            m_csi_metric += self.m_csi(predictions, target).float().cpu()
+            psnr_metric += self.psnr(predictions[:, ::self.channels_per_image], target).float().cpu()
+            ssmi_metric += self.ssim(predictions[:, ::self.channels_per_image], target).float().cpu()
+            mse_metric += self.loss_func(predictions[:, ::self.channels_per_image], target).float().cpu()
+            m_csi_metric += self.m_csi(predictions[:, ::self.channels_per_image], target).float().cpu()
 
         # Compute the mean of the metrics.
         psnr_metric = psnr_metric / len(self.valid_dataloader)
@@ -273,15 +275,15 @@ class MiniTrainer:
                     # Add the prediction to the past frames.
                     past_frames = torch.cat([past_frames, prediction_frames], dim=1)
                     # Remove the first frame from the past frames.
-                    past_frames = past_frames[:,1:]
+                    past_frames = past_frames[:,1*self.channels_per_image:]
                 # Get the predicted frames by cutting the last n_predicted frames.
-                predictions = past_frames[:,-self.n_predicted:]
+                predictions = past_frames[:,-self.n_predicted*self.channels_per_image:]
 
                 # Compute the metrics on the predicted frames and the target frames.
-                psnr_metric = self.psnr(predictions, val_target_frames).float().cpu()
-                ssmi_metric = self.ssim(predictions, val_target_frames).float().cpu()
-                mse_metric = self.loss_func(predictions, val_target_frames).float().cpu()
-                m_csi_metric = self.m_csi(predictions, val_target_frames).float().cpu()
+                psnr_metric = self.psnr(predictions[:, ::self.channels_per_image], val_target_frames).float().cpu()
+                ssmi_metric = self.ssim(predictions[:, ::self.channels_per_image], val_target_frames).float().cpu()
+                mse_metric = self.loss_func(predictions[:, ::self.channels_per_image], val_target_frames).float().cpu()
+                m_csi_metric = self.m_csi(predictions[:, ::self.channels_per_image], val_target_frames).float().cpu()
 
                 # Log the metrics on wandb.
                 wandb.log({
@@ -294,7 +296,7 @@ class MiniTrainer:
                 # Log the model predictions on wandb.
                 log_images(
                   val_target_frames[:1],
-                  predictions[:1],
+                  predictions[:1, ::self.channels_per_image],
                   scaling_values=(-.5, -5))
         # Save the model on wandb amd locally.
         save_model(self.model, config.model_name)
