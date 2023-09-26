@@ -58,7 +58,8 @@ def log_images(
 
 def save_model(
     model: Union[WandbModel, torch.nn.Module],
-    model_name: str
+    model_name: str,
+    models_folder: str = './models'
     ) -> None:
     """Save the model in the local models folder and log it to wandb.
 
@@ -72,7 +73,7 @@ def save_model(
     # Update the model name with the wandb run id.
     model_name = f'{wandb.run.id}_{model_name}'
     # Get the models folder.
-    models_folder = Path('models')
+    models_folder = Path(models_folder)
     if not models_folder.exists():
         models_folder.mkdir()
     # Save the model in the local models folder.

@@ -9,6 +9,7 @@ from torch.optim import AdamW
 from torch.optim.lr_scheduler import OneCycleLR
 from torchmetrics import PeakSignalNoiseRatio, StructuralSimilarityIndexMeasure
 
+from .checkpoint import Checkpoint
 from .dataloader import NoisifyDataloader, ValidationDataloader
 from .metrics import mCSI
 from .model import UNet2D
@@ -105,6 +106,7 @@ class MiniTrainer:
         self.val_batch = next(iter(valid_dataloader))
         self.n_predicted = n_predicted
         self.channels_per_image = channels_per_image
+        self.checkpoint = Checkpoint()
 
     def train_step(self, loss: torch.FloatTensor) -> None:
         """
@@ -295,11 +297,13 @@ class MiniTrainer:
                 # self.one_epoch_validation(epoch)
                 # Log the model predictions on wandb.
                 log_images(
-                  val_target_frames[:1],
-                  predictions[:1, ::self.channels_per_image],
-                  scaling_values=(-.5, -5))
-        # Save the model on wandb amd locally.
-        save_model(self.model, config.model_name)
+                    val_target_frames[:1],
+                    predictions[:1, ::self.channels_per_image],
+                    scaling_values=(-.5, -5))
+                # Save the model on wandb and locally based on the mse metric.
+                self.checkpoint.save_best(self.model, config.model_name, mse_metric.item())
+        # Save the model on wandb and locally.
+        # save_model(self.model, config.model_name)
 
     def __to_device(
         t: Union[List[float], Tuple[float, ...], torch.FloatTensor],

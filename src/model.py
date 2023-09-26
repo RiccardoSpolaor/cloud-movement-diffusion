@@ -121,9 +121,10 @@ def get_unet_params(
 
     if is_gru:
         params.update(
+            in_channels=num_channels + num_channels,
             input_dim=1,
             input_size=(64, 64),
-            hidden_size=3)
+            hidden_size=num_channels)
 
     return params
 
