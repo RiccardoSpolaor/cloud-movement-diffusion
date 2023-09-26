@@ -302,8 +302,8 @@ class MiniTrainer:
                     scaling_values=(-.5, -5))
                 # Save the model on wandb and locally based on the mse metric.
                 self.checkpoint.save_best(self.model, config.model_name, mse_metric.item())
-        # Save the model on wandb and locally.
-        # save_model(self.model, config.model_name)
+        # Save the best model according to checkpointing on wandb.
+        save_model(config.model_name)
 
     def __to_device(
         t: Union[List[float], Tuple[float, ...], torch.FloatTensor],

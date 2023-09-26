@@ -1,9 +1,10 @@
-import os
 from typing import Union
+import torch
+import wandb
 from torch import nn
+from pathlib import Path
 
 from .model import WandbModel
-from .wandb_utils import save_model
 
 
 class Checkpoint():
@@ -57,7 +58,14 @@ class Checkpoint():
         """
         if new_error < self.lowest_error:
             # Create the checkpoints
-            save_model(model, model_name, self.models_folder)
+            # Update the model name with the wandb run id.
+            model_name = f'{wandb.run.id}_{model_name}'
+            # Get the models folder.
+            models_folder = Path(models_folder)
+            if not models_folder.exists():
+                models_folder.mkdir()
+            # Save the model in the local models folder.
+            torch.save(model.state_dict(), models_folder/f'{model_name}.pth')
 
             # Update the lowest error.
             self.lowest_error = new_error

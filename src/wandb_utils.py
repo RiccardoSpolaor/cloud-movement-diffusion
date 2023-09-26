@@ -57,9 +57,8 @@ def log_images(
     wandb.log({'sampled_images': wandb_frames})
 
 def save_model(
-    model: Union[WandbModel, torch.nn.Module],
     model_name: str,
-    models_folder: str = './models'
+    models_folder: str = './model'
     ) -> None:
     """Save the model in the local models folder and log it to wandb.
 
@@ -74,11 +73,11 @@ def save_model(
     model_name = f'{wandb.run.id}_{model_name}'
     # Get the models folder.
     models_folder = Path(models_folder)
-    if not models_folder.exists():
-        models_folder.mkdir()
+    #if not models_folder.exists():
+    #    models_folder.mkdir()
     # Save the model in the local models folder.
-    torch.save(model.state_dict(), models_folder/f'{model_name}.pth')
+    # torch.save(model.state_dict(), models_folder/f'{model_name}.pth')
     # Create an artifact of the model and log it to wandb.
     artifact = wandb.Artifact(model_name, type='model')
-    artifact.add_file(f'models/{model_name}.pth')
+    artifact.add_file(models_folder/f'{model_name}.pth')
     wandb.log_artifact(artifact)
