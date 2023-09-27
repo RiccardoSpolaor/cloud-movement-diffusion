@@ -1,5 +1,6 @@
 from pathlib import Path
 from typing import Optional, Tuple, Union
+import matplotlib.pyplot as plt
 import torch
 import wandb
 
@@ -22,15 +23,24 @@ def _to_wandb_image(image: torch.FloatTensor) -> wandb.Image:
         The converted image.
     """
     # TODO: check correctness of comment
-    # Split the image into its channels and concatenate them.
-    image = torch.cat(image.split(1), dim=-1)
+    # Split the image into a vector.
+    #image = torch.cat(image.split(1), dim=-1)
     # Turn the image into a numpy array and remove from GPU.
     image = image.cpu().numpy()
     # Turn the image into a wandb image.
     return wandb.Image(image)
 
+def _scale_images_to_gray(
+    frames: torch.FloatTensor,
+    scaling_values: Tuple[float, float]) -> torch.LongTensor:
+    min_value, max_value = scaling_values
+    frames = (frames - min_value) * 255 / (max_value - min_value)
+    frames = frames.long()
+    frames = frames.clamp(min=0, max=255)
+    return frames
+
 def log_images(
-    sample_frames: torch.FloatTensor,
+    target_frames: torch.FloatTensor,
     predicted_frames: torch.FloatTensor,
     scaling_values: Optional[Tuple[float, float]] = None
     ) -> None:
@@ -39,22 +49,43 @@ def log_images(
 
     Parameters
     ----------
-    sample_frames : FloatTensor
-        The sampled images.
+    target_frames : FloatTensor
+        The sampled target images of shape (num_images, height, width).
     predicted_frames : FloatTensor
-        The images predicted by the model from the sampled images.
+        The images predicted by the model from the sampled target images.
+        The shape is (num_images, height, width).
     """
+    
     # Concatenate the sampled and predicted images.
-    frames = torch.cat([sample_frames, predicted_frames], dim=1)
+    #frames = torch.cat([sample_frames, predicted_frames], dim=1)
     # If the scaler is passed, unscale the images and
-    if scaling_values is not None:
-        min_value, max_value = scaling_values
-        frames = (frames - min_value) * 255 / (max_value - min_value)
-        frames = frames.long()
+    #if scaling_values is not None:
+    #    sample_frames = _scale_images_to_gray(sample_frames, scaling_values)
+    #    predicted_frames = _scale_images_to_gray(predicted_frames, scaling_values)
+    # Plot the sampled and predicted images.
+    target_frames = torch.cat(target_frames.split(1), dim=-1).squeeze(0)
+    target_frames = target_frames.cpu().numpy() 
+    predicted_frames = torch.cat(predicted_frames.split(1), dim=-1).squeeze(0)
+    predicted_frames = predicted_frames.cpu().numpy()
+
+    plt.figure(figsize=(15, 5))
+    plt.subplot(2, 1, 1)
+    print(target_frames.shape)
+    plt.imshow(target_frames, cmap='gray')
+    plt.title('Sampled Images')
+    plt.axis('off')
+    plt.subplot(2, 1, 2)
+    plt.imshow(predicted_frames, cmap='gray')
+    plt.title('Predicted Images')
+    plt.axis('off')
+    plt.show()
+
     # Convert the images to wandb images.
-    wandb_frames = [_to_wandb_image(img) for img in frames]
+    target_frames = wandb.Image(target_frames, caption='Target Images')
+    predicted_frames = wandb.Image(predicted_frames, caption='Predicted Images')
     # Log the images to wandb.
-    wandb.log({'sampled_images': wandb_frames})
+    wandb.log({
+        'sampled_images': [target_frames, predicted_frames]})
 
 def save_model(
     model_name: str,

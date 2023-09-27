@@ -128,7 +128,11 @@ class MiniTrainer:
         # Appply the step on the 1 cycle learning rate scheduler.
         self.scheduler.step()
 
-    def one_epoch(self, epoch: Optional[int] = None) -> None:
+    def one_epoch(
+        self,
+        epoch: int,
+        train_mse_history: List[Tuple[int, float]]
+        ) -> None:
         """
         Train one epoch, log the metrics and save the model.
 
@@ -140,7 +144,7 @@ class MiniTrainer:
         # Set the model to train mode.
         self.model.train()
         # Initialize the progress bar with the training dataloader.
-        pbar = progress_bar(self.train_dataloader, leave=False)
+        pbar = progress_bar(self.train_dataloader, leave=True)
         # Loop over the batches.
         for batch in pbar:
             # Get the frames, the temperature and the noise.
@@ -162,69 +166,71 @@ class MiniTrainer:
                 'learning_rate': self.scheduler.get_last_lr()[0]
                 })
             # Add the loss score to the progress bar.
-            pbar.comment = f'epoch={epoch}, MSE={loss.item():2.3f}'
+            pbar.comment = f'train epoch={epoch}, MSE={loss.item():2.3f}'
+            
+            train_mse_history.append((epoch, loss.item()))
 
-    def one_epoch_validation(self, epoch: Optional[int] = None) -> None:
-        """
-        Apply the validation step on the validation set for one epoch.
+    def one_epoch_validation(
+        self,
+        epoch: int,
+        config: SimpleNamespace,
+        val_mse_history: List[Tuple[int, float]],
+        val_psnr_history: List[Tuple[int, float]],
+        val_ssmi_history: List[Tuple[int, float]],
+        val_m_csi_history: List[Tuple[int, float]]
+        ) -> None:
+        # Validation is always done in the first validation loader batch for time purposes.
+        past_frames, val_target_frames = self.val_batch[0].to(self.device), self.val_batch[1].to(self.device)
+        # Prepare the validation progress bar.
+        pbar = progress_bar(range(self.n_predicted), leave=True)
+        # Apply autoregressive sampling.
+        for _ in pbar:
+            # Predict the next frame.
+            prediction_frames = self.sampler(self.model, past_frames=past_frames).to(self.device)
+            # Add the prediction to the past frames.
+            past_frames = torch.cat([past_frames, prediction_frames], dim=1)
+            # Remove the first frame from the past frames.
+            past_frames = past_frames[:,1*self.channels_per_image:]
+        # Get the predicted frames by cutting the last n_predicted frames.
+        predictions = past_frames[:,-self.n_predicted*self.channels_per_image:]
 
-        Parameters
-        ----------
-        epoch : int, optional
-            The epoch number, by default None.
-        """
-        # TODO: maybe the model should be in eval mode?
-        # Initialize the progress bar with the validation dataloader.
-        pbar = progress_bar(self.valid_dataloader, leave=False)
-        # Initialize the metrics at 0.
-        psnr_metric = 0.
-        mse_metric = 0.
-        ssmi_metric = 0.
-        m_csi_metric = 0.
-        # Loop over the batches.
-        for val_batch in pbar:
-            # Get the past frames and the target frames.
-            frames = val_batch[0].to(self.device)
-            target = frames[:,-self.n_predicted*self.channels_per_image:]
-            past_frames=frames[:,:-self.n_predicted*self.channels_per_image]
-            # samples = []
-            # Apply autoregressive sampling.
-            for _ in range(self.n_predicted):
-                # Predict the next frame.
-                prediction_frames = self.sampler(self.model, past_frames=past_frames).to(self.device)
-                # Add the prediction to the past frames.
-                past_frames = torch.cat([past_frames, prediction_frames], dim=1)
-                # Remove the first frame from the past frames.
-                past_frames = past_frames[:,1*self.channels_per_image:]
-            # Get the predicted frames by cutting the last n_predicted frames.
-            predictions = past_frames[:,-self.n_predicted*self.channels_per_image:]
+        # Compute the metrics on the predicted frames and the target frames.
+        psnr_metric = self.psnr(predictions[:, ::self.channels_per_image], val_target_frames).float().cpu()
+        ssmi_metric = self.ssim(predictions[:, ::self.channels_per_image], val_target_frames).float().cpu()
+        mse_metric = self.loss_func(predictions[:, ::self.channels_per_image], val_target_frames).float().cpu()
+        m_csi_metric = self.m_csi(predictions[:, ::self.channels_per_image], val_target_frames).float().cpu()
 
-            # Compute the metrics on the predicted frames and the target frames.
-            psnr_metric += self.psnr(predictions[:, ::self.channels_per_image], target).float().cpu()
-            ssmi_metric += self.ssim(predictions[:, ::self.channels_per_image], target).float().cpu()
-            mse_metric += self.loss_func(predictions[:, ::self.channels_per_image], target).float().cpu()
-            m_csi_metric += self.m_csi(predictions[:, ::self.channels_per_image], target).float().cpu()
-
-        # Compute the mean of the metrics.
-        psnr_metric = psnr_metric / len(self.valid_dataloader)
-        ssmi_metric = ssmi_metric / len(self.valid_dataloader)
-        mse_metric = mse_metric / len(self.valid_dataloader)
-        m_csi_metric = m_csi_metric / len(self.valid_dataloader)
+        # Print the metrics.
+        print(f'validation epoch={epoch},' +\
+            f' val PSNR={psnr_metric.item():2.3f},' +\
+            f' val SSMI={ssmi_metric.item():2.3f},' +\
+            f' val MSE={mse_metric.item():2.3f},' +\
+            f' val mCSI={m_csi_metric.item():2.3f}')
 
         # Log the metrics on wandb.
         wandb.log({
             'val_psnr': psnr_metric,
             'val_ssmi': ssmi_metric,
             'val_mse': mse_metric,
-            'val_m_csi': m_csi_metric
-            })
-        # TODO: Added now check if they are tensors and need the item() or not.
-        # Add the validation metrics to the progress bar.
-        pbar.comment = f'epoch={epoch},' +\
-            f' val PSNR={psnr_metric.item():2.3f},' +\
-            f' val SSMI={ssmi_metric.item():2.3f},' +\
-            f' val MSE={mse_metric.item():2.3f},' +\
-            f' val mCSI={m_csi_metric.item():2.3f}'
+            'val_m_csi': m_csi_metric})
+
+        # Plot the predicted and target frames and log them on wandb.
+        log_images(
+            val_target_frames[0],
+            predictions[0, ::self.channels_per_image],
+            scaling_values=(-.5, -5))
+        
+        # Save the metrics for plotting purposes.
+        val_mse_history.append((epoch, mse_metric.item()))
+        val_psnr_history.append((epoch, psnr_metric.item()))
+        val_ssmi_history.append((epoch, ssmi_metric.item()))
+        val_m_csi_history.append((epoch, m_csi_metric.item()))
+        
+        # Save the model parameters locally based on the mse metric.
+        self.checkpoint.save_best(
+            self.model,
+            config.model_name,
+            mse_metric.item())
 
     def __prepare(self, config: SimpleNamespace) -> None:
         """
@@ -245,65 +251,57 @@ class MiniTrainer:
         self.optimizer = AdamW(self.model.parameters(), lr=config.lr, eps=1e-5)
         self.scheduler = OneCycleLR(self.optimizer, max_lr=config.lr, total_steps=config.total_train_steps)
 
-    def fit(self, config: SimpleNamespace) -> None:
+    def fit(
+        self,
+        config: SimpleNamespace
+        ) -> Tuple[
+            List[Tuple[int, float]],
+            List[Tuple[int, float]],
+            List[Tuple[int, float]],
+            List[Tuple[int, float]],
+            List[Tuple[int, float]]]:
         # Prepare the pipeline.
         self.__prepare(config)
         # Get the validation past frames and target frames.
         # Validation is always done in the first validation loader batch for time purposes.
-        val_past_frames, val_target_frames = self.val_batch[0].to(self.device), self.val_batch[1].to(self.device) # __to_device gives weird error!
-        #print(val_past_frames.shape, val_target_frames.shape)
-        #val_frames, _, _ = self.__to_device(self.val_batch, device=self.device)
-        #val_past_frames = val_frames[:min(config.n_preds, 1), :-self.n_predicted]  # log first prediction
-        #val_target_frames = val_frames[:min(config.n_preds, 1), -self.n_predicted:]  # log first prediction
+        val_past_frames, val_target_frames = self.val_batch[0].to(self.device), self.val_batch[1].to(self.device)
+
+        # Create array of metrics for plotting purposes.
+        train_mse_history = []
+        val_mse_history = []
+        val_psnr_history = []
+        val_ssmi_history = []
+        val_m_csi_history = []
 
         # Loop over the epochs.
         for epoch in progress_bar(range(config.epochs), total=config.epochs, leave=True):
             # Apply the training step on one epoch.
-            self.one_epoch(epoch)
+            self.one_epoch(epoch, train_mse_history)
 
             # If the validation is enabled, apply the validation step.
-            if config.validate_epochs:
-                self.one_epoch_validation(epoch)
+            #if config.validate_epochs:
+            #    self.one_epoch_validation(epoch)
 
             # Log the model predictions on wandb on the validation set.
             if epoch % config.log_every_epoch == 0:
-                # TODO: semi-repeated code, refactor
-                # Get the fixed validation past frames.
-                past_frames = val_past_frames.clone()
-                # Apply autoregressive sampling.
-                for _ in range(self.n_predicted):
-                    # Predict the next frame.
-                    prediction_frames = self.sampler(self.model, past_frames=past_frames).to(self.device)
-                    # Add the prediction to the past frames.
-                    past_frames = torch.cat([past_frames, prediction_frames], dim=1)
-                    # Remove the first frame from the past frames.
-                    past_frames = past_frames[:,1*self.channels_per_image:]
-                # Get the predicted frames by cutting the last n_predicted frames.
-                predictions = past_frames[:,-self.n_predicted*self.channels_per_image:]
+                self.one_epoch_validation(
+                    epoch,
+                    config,
+                    val_mse_history,
+                    val_psnr_history,
+                    val_ssmi_history,
+                    val_m_csi_history)
 
-                # Compute the metrics on the predicted frames and the target frames.
-                psnr_metric = self.psnr(predictions[:, ::self.channels_per_image], val_target_frames).float().cpu()
-                ssmi_metric = self.ssim(predictions[:, ::self.channels_per_image], val_target_frames).float().cpu()
-                mse_metric = self.loss_func(predictions[:, ::self.channels_per_image], val_target_frames).float().cpu()
-                m_csi_metric = self.m_csi(predictions[:, ::self.channels_per_image], val_target_frames).float().cpu()
-
-                # Log the metrics on wandb.
-                wandb.log({
-                    'val_psnr': psnr_metric,
-                    'val_ssmi': ssmi_metric,
-                    'val_mse': mse_metric,
-                    'val_m_csi': m_csi_metric})
-                # samples = self.sampler(self.model, past_frames=val_past_frames)
-                # self.one_epoch_validation(epoch)
-                # Log the model predictions on wandb.
-                log_images(
-                    val_target_frames[:1],
-                    predictions[:1, ::self.channels_per_image],
-                    scaling_values=(-.5, -5))
-                # Save the model on wandb and locally based on the mse metric.
-                self.checkpoint.save_best(self.model, config.model_name, mse_metric.item())
         # Save the best model according to checkpointing on wandb.
         save_model(config.model_name)
+
+        # Return the metrics history.
+        return (
+            train_mse_history,
+            val_mse_history,
+            val_psnr_history,
+            val_ssmi_history,
+            val_m_csi_history)
 
     def __to_device(
         t: Union[List[float], Tuple[float, ...], torch.FloatTensor],
