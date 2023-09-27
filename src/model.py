@@ -82,8 +82,9 @@ class WandbModel:
 
 def get_unet_params(
     model_name: str,
-    num_frames: int,
-    num_channels: int = 1,
+    num_input_frames: int,
+    num_output_frames: int,
+    num_channels: int,
     is_gru: bool = False
     ) -> dict: # TODO parametrize the num frames and num channels
     """
@@ -106,20 +107,21 @@ def get_unet_params(
         params = dict(
             block_out_channels=(16, 32, 64, 128), # number of channels for each block
             norm_num_groups=8, # number of groups for the normalization layer
-            in_channels=num_frames*num_channels, # number of input channels
-            out_channels=num_channels, # number of output channels
+            in_channels=num_input_frames*num_channels, # number of input channels
+            out_channels=num_output_frames*num_channels, # number of output channels
             )
     elif model_name == "unet_big":
         params = dict(
             block_out_channels=(32, 64, 128, 256), # number of channels for each block
             norm_num_groups=8, # number of groups for the normalization layer
-            in_channels=num_frames*num_channels, # number of input channels
-            out_channels=num_channels, # number of output channels
+            in_channels=num_input_frames*num_channels, # number of input channels
+            out_channels=num_output_frames*num_channels, # number of output channels
             )
     else:
         raise(f"Model name not found: {model_name}, choose between 'unet_small' or 'unet_big'")
 
     if is_gru:
+        # TODO: fix this
         params.update(
             in_channels=num_channels + num_channels,
             input_dim=1,

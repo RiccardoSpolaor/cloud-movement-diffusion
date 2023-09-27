@@ -12,6 +12,7 @@ def _diffusers_sampler(
     model: UNet2D,
     past_frames: torch.FloatTensor,
     sched: DDIMScheduler,
+    n_frames_to_predict: int = 1,
     n_channels: int = 1,
     **kwargs
     ) -> torch.FloatTensor:
@@ -36,8 +37,16 @@ def _diffusers_sampler(
     model.eval()
     # Get the device used by the model.
     device = next(model.parameters()).device
-    # Create a new frame to condition on.
-    new_frame = torch.randn_like(past_frames[:,-1*n_channels:], dtype=past_frames.dtype, device=device)
+    # Create the new frames to condition on.
+    new_frames = torch.randn_like(
+        past_frames[:,-n_frames_to_predict:],
+        dtype=past_frames.dtype,
+        device=device)
+    b, _, _, h, w = past_frames.shape
+    # Reshape the past frames and the frames to condition on to match the model
+    # input shape.
+    past_frames = past_frames.reshape(b, -1, h, w)
+    new_frames = new_frames.reshape(b, -1, h, w)
     # Store the predicted frames to an empty list.
     preds = []
     # Create a progress bar of the given timestep.
@@ -47,19 +56,20 @@ def _diffusers_sampler(
         # Update the progress bar.
         pbar.comment = f"DDIM Sampler: frame {t}"
         # Concatenate the past frames with the new frame.
-        input = torch.cat([past_frames, new_frame], dim=1)
+        input = torch.cat([past_frames, new_frames], dim=1)
         # Get the noise.
         noise = model(input, t)
         # Step the scheduler and get the new frame.
-        new_frame = sched.step(noise, t, new_frame, **kwargs).prev_sample
+        new_frames = sched.step(noise, t, new_frames, **kwargs).prev_sample
         # Append the new frame to the list of predicted frames.
-        preds.append(new_frame.float().cpu())
+        preds.append(new_frames.float().cpu())
     # Return the last predicted frame.
     return preds[-1]
 
 def ddim_sampler(
     steps: int = 350,
     eta: float = 1.,
+    n_frames_to_predict: int = 1,
     n_channels: int = 1
     ) -> Callable[[UNet2D, torch.FloatTensor], torch.FloatTensor]:
     """Get the DDIM sampler. Faster and a bit better than the built-in sampler.
@@ -81,4 +91,9 @@ def ddim_sampler(
     # Set the number of timesteps.
     ddim_sched.set_timesteps(steps)
     # Get the partial function for the diffusers sampler.
-    return partial(_diffusers_sampler, sched=ddim_sched, eta=eta, n_channels=n_channels)
+    return partial(
+      _diffusers_sampler,
+      sched=ddim_sched,
+      eta=eta,
+      n_channels=n_channels,
+      n_frames_to_predict=n_frames_to_predict)

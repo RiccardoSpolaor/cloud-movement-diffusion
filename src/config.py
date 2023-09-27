@@ -2,7 +2,7 @@ from types import SimpleNamespace
 
 # TODO: Some of these parameters are not used, remove them.
 config = SimpleNamespace(
-    epochs=50, # Number of epochs.
+    epochs=51, # Number of epochs.
     model_name='unet_small', # Model name to save [unet_small, unet_big].
     strategy='ddpm', # Strategy to use ddpm.
     noise_steps=1_000, # Number of noise steps on the diffusion process.

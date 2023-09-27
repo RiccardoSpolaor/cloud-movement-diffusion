@@ -69,7 +69,9 @@ class MiniTrainer:
         ir069_scaler: object,
         device: str = 'cuda',
         loss_func: nn.Module = nn.MSELoss(),
-        n_predicted: int = 3,
+        n_frames_to_predict: int = 1,
+        # TODO: change to auto_regression_steps 
+        n_auto_regression_steps: Union[int, None] = 3,
         channels_per_image: int = 1,
         ) -> None:
         """
@@ -104,7 +106,8 @@ class MiniTrainer:
         self.device = device
         self.sampler = sampler
         self.val_batch = next(iter(valid_dataloader))
-        self.n_predicted = n_predicted
+        self.n_auto_regression_steps = n_auto_regression_steps
+        self.n_frames_to_predict = n_frames_to_predict
         self.channels_per_image = channels_per_image
         self.checkpoint = Checkpoint()
 
@@ -149,9 +152,13 @@ class MiniTrainer:
         for batch in pbar:
             # Get the frames, the temperature and the noise.
             frames, t, noise = batch[0].to(self.device), batch[1].to(self.device), batch[2].to(self.device)  # __to_device gives weird error!
+            b, _, _, h, w = frames.shape
+            # Reshape the frames and the noise to match the model input shape.
+            frames = frames.reshape(b, -1, h, w)
+            noise = noise.reshape(b, -1, h, w)
             #self.__to_device(batch, device=self.device)
             # Squeeze the noise on the second dimension.
-            noise = noise.squeeze(1)
+            # noise = noise.squeeze(1)
             # Apply mixed precision on the prediction.
             with torch.autocast('cuda'):
                 # Predict the noise through the model.
@@ -181,24 +188,41 @@ class MiniTrainer:
         ) -> None:
         # Validation is always done in the first validation loader batch for time purposes.
         past_frames, val_target_frames = self.val_batch[0].to(self.device), self.val_batch[1].to(self.device)
-        # Prepare the validation progress bar.
-        pbar = progress_bar(range(self.n_predicted), leave=True)
-        # Apply autoregressive sampling.
-        for _ in pbar:
-            # Predict the next frame.
+        b, _, c, h, w = past_frames.shape
+        if self.n_auto_regression_steps is None or self.n_auto_regression_steps == 0:
             prediction_frames = self.sampler(self.model, past_frames=past_frames).to(self.device)
-            # Add the prediction to the past frames.
-            past_frames = torch.cat([past_frames, prediction_frames], dim=1)
-            # Remove the first frame from the past frames.
-            past_frames = past_frames[:,1*self.channels_per_image:]
-        # Get the predicted frames by cutting the last n_predicted frames.
-        predictions = past_frames[:,-self.n_predicted*self.channels_per_image:]
+            predictions = prediction_frames.reshape(
+                b,
+                self.n_frames_to_predict,
+                c,
+                h,
+                w)
+        else:
+            # Prepare the validation progress bar.
+            pbar = progress_bar(range(self.n_auto_regression_steps), leave=True)
+            # Apply autoregressive sampling.
+            for _ in pbar:
+                # Predict the next frame.
+                prediction_frames = self.sampler(self.model, past_frames=past_frames).to(self.device)
+                # Reshape the predictions to their original size.
+                prediction_frames = prediction_frames.reshape(
+                    b,
+                    self.n_frames_to_predict,
+                    c,
+                    h,
+                    w)
+                # Add the prediction to the past frames.
+                past_frames = torch.cat([past_frames, prediction_frames], dim=1)
+                # Remove the first frame from the past frames.
+                past_frames = past_frames[:,1:]
+            # Get the predicted frames by cutting the last n_predicted frames.
+            predictions = past_frames[:,-self.n_auto_regression_steps:]
 
         # Compute the metrics on the predicted frames and the target frames.
-        psnr_metric = self.psnr(predictions[:, ::self.channels_per_image], val_target_frames).float().cpu()
-        ssmi_metric = self.ssim(predictions[:, ::self.channels_per_image], val_target_frames).float().cpu()
-        mse_metric = self.loss_func(predictions[:, ::self.channels_per_image], val_target_frames).float().cpu()
-        m_csi_metric = self.m_csi(predictions[:, ::self.channels_per_image], val_target_frames).float().cpu()
+        psnr_metric = self.psnr(predictions[:, :, 0], val_target_frames[:,:,0]).float().cpu()
+        ssmi_metric = self.ssim(predictions[:, :, 0], val_target_frames[:,:,0]).float().cpu()
+        mse_metric = self.loss_func(predictions[:, :, 0], val_target_frames[:,:,0]).float().cpu()
+        m_csi_metric = self.m_csi(predictions[:, :, 0], val_target_frames[:,:,0]).float().cpu()
 
         # Print the metrics.
         print(f'validation epoch={epoch},' +\
@@ -216,8 +240,8 @@ class MiniTrainer:
 
         # Plot the predicted and target frames and log them on wandb.
         log_images(
-            val_target_frames[0],
-            predictions[0, ::self.channels_per_image],
+            val_target_frames[0, :, 0],
+            predictions[0, :, 0],
             scaling_values=(-.5, -5))
         
         # Save the metrics for plotting purposes.
