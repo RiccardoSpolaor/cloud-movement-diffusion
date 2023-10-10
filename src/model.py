@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Tuple
+from typing import Tuple, Literal
 
 import wandb
 import fastcore.all as fc
@@ -84,8 +84,7 @@ def get_unet_params(
     model_name: str,
     num_input_frames: int,
     num_output_frames: int,
-    num_channels: int,
-    is_gru: bool = False
+    num_channels: int
     ) -> dict: # TODO parametrize the num frames and num channels
     """
     Get the parameters for a diffuser UNet2D model.
@@ -120,13 +119,36 @@ def get_unet_params(
     else:
         raise(f"Model name not found: {model_name}, choose between 'unet_small' or 'unet_big'")
 
-    if is_gru:
-        # TODO: fix this
-        params.update(
-            in_channels=num_channels + num_channels,
-            input_dim=1,
-            input_size=(64, 64),
-            hidden_size=num_channels)
+    return params
+
+def add_gru_params(
+    params: dict,
+    num_input_past_frames: int,
+    num_input_prediction_frames: int,
+    num_channels: int,
+    mode: Literal[
+        'last_output',
+        'all_outputs',
+        'last_output_and_last_frame',
+        'interleave_frames_and_outputs'],
+    ) -> dict:
+    if mode == 'last_output':
+        in_channels = 1 * num_channels + num_input_prediction_frames * num_channels
+    elif mode == 'all_outputs':
+        in_channels = num_input_past_frames * num_channels + num_input_prediction_frames * num_channels
+    elif mode == 'last_output_and_last_frame':
+        in_channels = 2 * num_channels + num_input_prediction_frames * num_channels
+    elif mode == 'interleave_frames_and_outputs':
+        num_input_past_frames * 2 * num_channels + num_input_prediction_frames * num_channels
+    else:
+        raise(f"Mode not found: {mode}, choose between 'last_output', 'all_outputs', 'last_output_and_last_frame', 'interleave_frames_and_outputs'")
+
+    params.update(
+        in_channels=in_channels,
+        input_dim=num_channels,
+        input_size=(64, 64),
+        hidden_size=num_channels,
+        mode=mode)
 
     return params
 
@@ -156,33 +178,59 @@ class UNet2D(UNet2DModel, WandbModel):
         return super().forward(*args, **kwargs).sample ## Diffusers's UNet2DOutput class
 
 class UNet2DTemporalCondition(UNet2DModel, WandbModel):
-    def __init__(self, 
-                 *x,
-                 input_dim: int,
-                 input_size: Tuple[int, int], 
-                 hidden_size: int,
-                 device: str = "cuda",
-                 **kwargs):
+    def __init__(
+        self, 
+        *x,
+        input_dim: int,
+        input_size: Tuple[int, int], 
+        hidden_size: int,
+        device: str = "cuda",
+        mode: Literal[
+            'last_output',
+            'all_outputs',
+            'last_output_and_last_frame',
+            'interleave_frames_and_outputs'],
+        **kwargs):
         super().__init__(*x, **kwargs)
         init_unet(self)
-        self.temporal_encoder = ConvGRU(input_size=input_size,
-                                        input_dim=input_dim,
-                                        hidden_dim=hidden_size,
-                                        kernel_size=(3, 3),
-                                        num_layers=2,
-                                        dtype=torch.cuda.FloatTensor,
-                                        batch_first=True,
-                                        bias = True,
-                                        return_all_layers = False).to(device)
+        self.temporal_encoder = ConvGRU(
+            input_size=input_size,
+            input_dim=input_dim,
+            hidden_dim=hidden_size,
+            kernel_size=(3, 3),
+            num_layers=2,
+            dtype=torch.cuda.FloatTensor,
+            batch_first=True,
+            bias = True,
+            return_all_layers = False).to(device)
+        self.mode=mode
+        self.out_channels=kwargs['out_channels']
+        self.input_dim=input_dim
 
     def forward(self, *x, **kwargs):
         # TODO: consider case where x has more than one channel?
         # Get first frames and add the channel dimension to them.
-        temporal_input = x[0][:, :-1].unsqueeze(2) # first three images
-        _, encoder_hidden_states = self.temporal_encoder(temporal_input.to(self.device))
-        conv_lstm_features = encoder_hidden_states[0][0].to(self.device)
-        noisy_frame = x[0][:, -1:]
-        #print(noisy_frame.shape)
+        b, _, h, w  = x[0].shape
+        temporal_input = x[0][:, :-self.out_channels] # past frames
+        # Reshape as (b, t, c, h, w)
+        temporal_input = temporal_input.reshape(b, -1, self.input_dim, h, w)
+        output, _ = self.temporal_encoder(temporal_input.to(self.device))
+        if self.mode == 'last_output':
+            conv_lstm_features = output[0][:, -1]
+        elif self.mode == 'all_outputs':
+            conv_lstm_features = output[0].reshape(b, -1, h, w)
+        elif self.mode == 'last_output_and_last_frame':
+            conv_lstm_features = torch.cat([output[0][:, -1], temporal_input[:, -1]], dim=1) 
+        elif self.mode == 'interleave_frames_and_outputs':
+            features = []
+            for i in range(temporal_input.shape[1]):
+                features += [output[0][:, i], temporal_input[:, i]]
+                conv_lstm_features = torch.cat(features, dim=1) 
+        else:
+            raise(f"Mode not found: {self.mode}, choose between 'last_output', 'all_outputs', 'last_output_and_last_frame', 'interleave_frames_and_outputs'")
+
+        #conv_lstm_features = encoder_hidden_states[0][0].to(self.device)
+        noisy_frame = x[0][:, -self.out_channels:]
         noise_hidden_state = torch.cat([conv_lstm_features, noisy_frame], dim=1)
 
         return super().forward(noise_hidden_state, timestep=x[1], **kwargs).sample ## Diffusers's UNet2DConditionModel class
