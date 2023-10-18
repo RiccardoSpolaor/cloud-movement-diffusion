@@ -1,15 +1,15 @@
 from functools import partial
-from typing import Callable
+from typing import Callable, Union
 
 import torch
 from fastprogress import progress_bar
 from diffusers.schedulers import DDIMScheduler
 
-from .model import UNet2D
+from .model import UNet2D, UNet2DTemporalCondition, UNet3D
 
 @torch.no_grad()
 def _diffusers_sampler(
-    model: UNet2D,
+    model: Union[UNet2D, UNet2DTemporalCondition, UNet3D],
     past_frames: torch.FloatTensor,
     sched: DDIMScheduler,
     n_frames_to_predict: int = 1,
@@ -45,8 +45,9 @@ def _diffusers_sampler(
     b, _, _, h, w = past_frames.shape
     # Reshape the past frames and the frames to condition on to match the model
     # input shape.
-    past_frames = past_frames.reshape(b, -1, h, w)
-    new_frames = new_frames.reshape(b, -1, h, w)
+    if type(model) == UNet2D or type(model) == UNet2DTemporalCondition:
+        past_frames = past_frames.reshape(b, -1, h, w)
+        new_frames = new_frames.reshape(b, -1, h, w)
     # Store the predicted frames to an empty list.
     preds = []
     # Create a progress bar of the given timestep.

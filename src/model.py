@@ -8,6 +8,7 @@ from torch import nn
 from diffusers import UNet2DModel
 
 from .conv_gru import ConvGRU
+from .unet3d import SpaceTimeUnet
 
 
 def init_unet(model):
@@ -177,6 +178,67 @@ class UNet2D(UNet2DModel, WandbModel):
         """
         return super().forward(*args, **kwargs).sample ## Diffusers's UNet2DOutput class
 
+
+class UNet3D(nn.Module, WandbModel):
+    def __init__(
+        self,
+        *x,
+        input_size: Tuple[int, int, int],
+        device: str = "cuda",
+        **kwargs):
+        super().__init__(*x, **kwargs)
+        self.unet = SpaceTimeUnet(
+            dim = 64,
+            channels = input_size[0],
+            dim_mult = (1, 2, 4, 8),
+            temporal_compression = (False, False, False, True),
+            self_attns = (False, False, False, True),
+            condition_on_timestep=True)
+
+    def forward(self, *x, **kwargs):
+        #print(x[0].shape, x[1].shape)
+        #temporal_input = x[0] # first 4 images
+        #noisy_frames = x[1].unsqueeze(2)
+        #input = torch.cat([temporal_input, noisy_frames], dim=1)        
+        input = x[0].permute((0,2,1,3,4))
+        
+        timesteps = x[1]
+        if not torch.is_tensor(timesteps):
+            timesteps = torch.tensor([timesteps], dtype=torch.float32, device=input.device)
+        elif torch.is_tensor(timesteps) and len(timesteps.shape) == 0:
+            timesteps = timesteps[None].to(input.device)
+
+        # broadcast to batch dimension in a way that's compatible with ONNX/Core ML
+        timesteps = timesteps * torch.ones(input.shape[0], dtype=torch.float32, device=timesteps.device)
+        out = self.unet(input, timesteps)#, x[1].type(torch.float32))
+        out = out.permute(0,2,1,3,4)
+        return out
+'''
+class UNet3D(UNet3DModel, WandbModel):
+    """Class of a UNet2D model that can be saved to wandb"""
+    def __init__(self, *args, **kwargs) -> None:
+        """
+        Initialize a UNet2D model that can be saved to wandb.
+        
+        Parameters
+        ----------
+        kwargs : dict
+            The parameters for the UNet2D model.
+        """
+        super().__init__(*args, **kwargs)
+        # Initialize the weights of the model.
+        init_unet(self)
+
+    def forward(self, *args, **kwargs) -> torch.FloatTensor:
+        """Apply the UNet2D model to the input.
+
+        Returns
+        -------
+        torch.FloatTensor
+            The output of the UNet2D model.
+        """
+        return super().forward(*args, **kwargs).sample ## Diffusers's UNet2DOutput class
+'''
 class UNet2DTemporalCondition(UNet2DModel, WandbModel):
     def __init__(
         self, 

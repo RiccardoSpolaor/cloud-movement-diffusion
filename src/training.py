@@ -12,7 +12,7 @@ from torchmetrics import PeakSignalNoiseRatio, StructuralSimilarityIndexMeasure
 from .checkpoint import Checkpoint
 from .dataloader import NoisifyDataloader, ValidationDataloader
 from .metrics import mCSI
-from .model import UNet2D
+from .model import UNet2D, UNet2DTemporalCondition, UNet3D
 from .wandb_utils import log_images, save_model
 
 
@@ -64,7 +64,7 @@ class MiniTrainer:
         self,
         train_dataloader: NoisifyDataloader,
         valid_dataloader: ValidationDataloader,
-        model: UNet2D,
+        model: Union[UNet2D, UNet2DTemporalCondition, UNet3D],
         sampler: Callable[[UNet2D, torch.FloatTensor], torch.FloatTensor],
         ir069_scaler: object,
         device: str = 'cuda',
@@ -73,6 +73,7 @@ class MiniTrainer:
         # TODO: change to auto_regression_steps 
         n_auto_regression_steps: Union[int, None] = 3,
         channels_per_image: int = 1,
+        also_validate_on_last_frame=False
         ) -> None:
         """
         Initializes the MiniTrainer class.
@@ -110,6 +111,7 @@ class MiniTrainer:
         self.n_frames_to_predict = n_frames_to_predict
         self.channels_per_image = channels_per_image
         self.checkpoint = Checkpoint()
+        self.also_validate_on_last_frame = also_validate_on_last_frame
 
     def train_step(self, loss: torch.FloatTensor) -> None:
         """
@@ -154,8 +156,9 @@ class MiniTrainer:
             frames, t, noise = batch[0].to(self.device), batch[1].to(self.device), batch[2].to(self.device)  # __to_device gives weird error!
             b, _, _, h, w = frames.shape
             # Reshape the frames and the noise to match the model input shape.
-            frames = frames.reshape(b, -1, h, w)
-            noise = noise.reshape(b, -1, h, w)
+            if type(self.model) == UNet2D or type(self.model) == UNet2DTemporalCondition:
+                frames = frames.reshape(b, -1, h, w)
+                noise = noise.reshape(b, -1, h, w)
             #self.__to_device(batch, device=self.device)
             # Squeeze the noise on the second dimension.
             # noise = noise.squeeze(1)
@@ -184,19 +187,24 @@ class MiniTrainer:
         val_mse_history: List[Tuple[int, float]],
         val_psnr_history: List[Tuple[int, float]],
         val_ssmi_history: List[Tuple[int, float]],
-        val_m_csi_history: List[Tuple[int, float]]
+        val_m_csi_history: List[Tuple[int, float]],
+        val_mse_last_frame_history: List[Tuple[int, float]],
+        val_psnr_last_frame_history: List[Tuple[int, float]],
+        val_ssim_last_frame_history: List[Tuple[int, float]],
+        val_m_csi_last_frame_history: List[Tuple[int, float]]
         ) -> None:
         # Validation is always done in the first validation loader batch for time purposes.
         past_frames, val_target_frames = self.val_batch[0].to(self.device), self.val_batch[1].to(self.device)
         b, _, c, h, w = past_frames.shape
         if self.n_auto_regression_steps is None or self.n_auto_regression_steps == 0:
             prediction_frames = self.sampler(self.model, past_frames=past_frames).to(self.device)
-            predictions = prediction_frames.reshape(
-                b,
-                self.n_frames_to_predict,
-                c,
-                h,
-                w)
+            if type(self.model) == UNet2D or type(self.model) == UNet2DTemporalCondition:
+                predictions = prediction_frames.reshape(
+                    b,
+                    self.n_frames_to_predict,
+                    c,
+                    h,
+                    w)
         else:
             # Prepare the validation progress bar.
             pbar = progress_bar(range(self.n_auto_regression_steps), leave=True)
@@ -205,12 +213,13 @@ class MiniTrainer:
                 # Predict the next frame.
                 prediction_frames = self.sampler(self.model, past_frames=past_frames).to(self.device)
                 # Reshape the predictions to their original size.
-                prediction_frames = prediction_frames.reshape(
-                    b,
-                    self.n_frames_to_predict,
-                    c,
-                    h,
-                    w)
+                if type(self.model) == UNet2D or type(self.model) == UNet2DTemporalCondition:
+                    prediction_frames = prediction_frames.reshape(
+                        b,
+                        self.n_frames_to_predict,
+                        c,
+                        h,
+                        w)
                 # Add the prediction to the past frames.
                 past_frames = torch.cat([past_frames, prediction_frames], dim=1)
                 # Remove the first frame from the past frames.
@@ -238,17 +247,43 @@ class MiniTrainer:
             'val_mse': mse_metric,
             'val_m_csi': m_csi_metric})
 
-        # Plot the predicted and target frames and log them on wandb.
-        log_images(
-            val_target_frames[0, :, 0],
-            predictions[0, :, 0],
-            scaling_values=(-.5, -5))
-        
         # Save the metrics for plotting purposes.
         val_mse_history.append((epoch, mse_metric.item()))
         val_psnr_history.append((epoch, psnr_metric.item()))
         val_ssmi_history.append((epoch, ssmi_metric.item()))
         val_m_csi_history.append((epoch, m_csi_metric.item()))
+
+        if self.also_validate_on_last_frame:
+            # Compute the metrics on the predicted last frames and the last target frames.
+            psnr_metric_last_frame = self.psnr(predictions[:, -1, 0], val_target_frames[:,-1,0]).float().cpu()
+            ssmi_metric_last_frame = self.ssim(predictions[:, -1:, 0], val_target_frames[:,-1,0]).float().cpu()
+            mse_metric_last_frame = self.loss_func(predictions[:, -1, 0], val_target_frames[:,-1,0]).float().cpu()
+            m_csi_metric_last_frame = self.m_csi(predictions[:, -1, 0], val_target_frames[:,-1,0]).float().cpu()
+            
+            # Print the metrics.
+            print(
+                f' val PSNR last frame={psnr_metric_last_frame.item():2.3f},' +\
+                f' val SSMI last frame={ssmi_metric_last_frame.item():2.3f},' +\
+                f' val MSE last frame={mse_metric_last_frame.item():2.3f},' +\
+                f' val mCSI last frame={m_csi_metric_last_frame.item():2.3f}')
+
+            # Log the metrics on wandb.
+            wandb.log({
+                'val_psnr_last_frame': psnr_metric_last_frame,
+                'val_ssmi_last_frame': ssmi_metric_last_frame,
+                'val_mse_last_frame': mse_metric_last_frame,
+                'val_m_csi_last_frame': m_csi_metric_last_frame})
+
+            val_mse_last_frame_history.append((epoch, mse_metric_last_frame.item()))
+            val_psnr_last_frame_history.append((epoch, psnr_metric_last_frame.item()))
+            val_ssim_last_frame_history.append((epoch, ssmi_metric_last_frame.item()))
+            val_m_csi_last_frame_history.append((epoch, m_csi_metric_last_frame.item()))
+
+        # Plot the predicted and target frames and log them on wandb.
+        log_images(
+            val_target_frames[0, :, 0],
+            predictions[0, :, 0],
+            scaling_values=(-.5, -5))
         
         # Save the model parameters locally based on the mse metric.
         self.checkpoint.save_best(
@@ -288,7 +323,7 @@ class MiniTrainer:
         self.__prepare(config)
         # Get the validation past frames and target frames.
         # Validation is always done in the first validation loader batch for time purposes.
-        val_past_frames, val_target_frames = self.val_batch[0].to(self.device), self.val_batch[1].to(self.device)
+        #val_past_frames, val_target_frames = self.val_batch[0].to(self.device), self.val_batch[1].to(self.device)
 
         # Create array of metrics for plotting purposes.
         train_mse_history = []
@@ -296,6 +331,10 @@ class MiniTrainer:
         val_psnr_history = []
         val_ssmi_history = []
         val_m_csi_history = []
+        val_mse_last_frame_history = []
+        val_psnr_last_frame_history = []
+        val_ssmi_last_frame_history = []
+        val_m_csi_last_frame_history = []
 
         # Loop over the epochs.
         for epoch in progress_bar(range(config.epochs), total=config.epochs, leave=True):
@@ -314,18 +353,31 @@ class MiniTrainer:
                     val_mse_history,
                     val_psnr_history,
                     val_ssmi_history,
-                    val_m_csi_history)
+                    val_m_csi_history,
+                    val_mse_last_frame_history,
+                    val_psnr_last_frame_history,
+                    val_ssmi_last_frame_history,
+                    val_m_csi_last_frame_history)
 
         # Save the best model according to checkpointing on wandb.
         save_model(config.model_name)
 
         # Return the metrics history.
-        return (
+        histories = (
             train_mse_history,
             val_mse_history,
             val_psnr_history,
             val_ssmi_history,
             val_m_csi_history)
+
+        if self.also_validate_on_last_frame:
+            histories += (
+                val_mse_last_frame_history,
+                val_psnr_last_frame_history,
+                val_ssmi_last_frame_history,
+                val_m_csi_last_frame_history)
+        
+        return histories
 
     def __to_device(
         t: Union[List[float], Tuple[float, ...], torch.FloatTensor],
