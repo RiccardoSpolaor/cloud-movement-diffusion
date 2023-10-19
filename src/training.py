@@ -186,7 +186,7 @@ class MiniTrainer:
         config: SimpleNamespace,
         val_mse_history: List[Tuple[int, float]],
         val_psnr_history: List[Tuple[int, float]],
-        val_ssmi_history: List[Tuple[int, float]],
+        val_ssim_history: List[Tuple[int, float]],
         val_m_csi_history: List[Tuple[int, float]],
         val_mse_last_frame_history: List[Tuple[int, float]],
         val_psnr_last_frame_history: List[Tuple[int, float]],
@@ -229,54 +229,54 @@ class MiniTrainer:
 
         # Compute the metrics on the predicted frames and the target frames.
         psnr_metric = self.psnr(predictions[:, :, 0], val_target_frames[:,:,0]).float().cpu()
-        ssmi_metric = self.ssim(predictions[:, :, 0], val_target_frames[:,:,0]).float().cpu()
+        ssim_metric = self.ssim(predictions[:, :, 0], val_target_frames[:,:,0]).float().cpu()
         mse_metric = self.loss_func(predictions[:, :, 0], val_target_frames[:,:,0]).float().cpu()
         m_csi_metric = self.m_csi(predictions[:, :, 0], val_target_frames[:,:,0]).float().cpu()
 
         # Print the metrics.
         print(f'validation epoch={epoch},' +\
             f' val PSNR={psnr_metric.item():2.3f},' +\
-            f' val SSMI={ssmi_metric.item():2.3f},' +\
+            f' val SSIM={ssim_metric.item():2.3f},' +\
             f' val MSE={mse_metric.item():2.3f},' +\
             f' val mCSI={m_csi_metric.item():2.3f}')
 
         # Log the metrics on wandb.
         wandb.log({
             'val_psnr': psnr_metric,
-            'val_ssmi': ssmi_metric,
+            'val_ssim': ssim_metric,
             'val_mse': mse_metric,
             'val_m_csi': m_csi_metric})
 
         # Save the metrics for plotting purposes.
         val_mse_history.append((epoch, mse_metric.item()))
         val_psnr_history.append((epoch, psnr_metric.item()))
-        val_ssmi_history.append((epoch, ssmi_metric.item()))
+        val_ssim_history.append((epoch, ssim_metric.item()))
         val_m_csi_history.append((epoch, m_csi_metric.item()))
 
         if self.also_validate_on_last_frame:
             # Compute the metrics on the predicted last frames and the last target frames.
             psnr_metric_last_frame = self.psnr(predictions[:, -1, 0], val_target_frames[:,-1,0]).float().cpu()
-            ssmi_metric_last_frame = self.ssim(predictions[:, -1:, 0], val_target_frames[:,-1,0]).float().cpu()
+            ssim_metric_last_frame = self.ssim(predictions[:, -1:, 0], val_target_frames[:,-1,0]).float().cpu()
             mse_metric_last_frame = self.loss_func(predictions[:, -1, 0], val_target_frames[:,-1,0]).float().cpu()
             m_csi_metric_last_frame = self.m_csi(predictions[:, -1, 0], val_target_frames[:,-1,0]).float().cpu()
             
             # Print the metrics.
             print(
                 f' val PSNR last frame={psnr_metric_last_frame.item():2.3f},' +\
-                f' val SSMI last frame={ssmi_metric_last_frame.item():2.3f},' +\
+                f' val SSIM last frame={ssim_metric_last_frame.item():2.3f},' +\
                 f' val MSE last frame={mse_metric_last_frame.item():2.3f},' +\
                 f' val mCSI last frame={m_csi_metric_last_frame.item():2.3f}')
 
             # Log the metrics on wandb.
             wandb.log({
                 'val_psnr_last_frame': psnr_metric_last_frame,
-                'val_ssmi_last_frame': ssmi_metric_last_frame,
+                'val_ssim_last_frame': ssim_metric_last_frame,
                 'val_mse_last_frame': mse_metric_last_frame,
                 'val_m_csi_last_frame': m_csi_metric_last_frame})
 
             val_mse_last_frame_history.append((epoch, mse_metric_last_frame.item()))
             val_psnr_last_frame_history.append((epoch, psnr_metric_last_frame.item()))
-            val_ssim_last_frame_history.append((epoch, ssmi_metric_last_frame.item()))
+            val_ssim_last_frame_history.append((epoch, ssim_metric_last_frame.item()))
             val_m_csi_last_frame_history.append((epoch, m_csi_metric_last_frame.item()))
 
         # Plot the predicted and target frames and log them on wandb.
@@ -329,11 +329,11 @@ class MiniTrainer:
         train_mse_history = []
         val_mse_history = []
         val_psnr_history = []
-        val_ssmi_history = []
+        val_ssim_history = []
         val_m_csi_history = []
         val_mse_last_frame_history = []
         val_psnr_last_frame_history = []
-        val_ssmi_last_frame_history = []
+        val_ssim_last_frame_history = []
         val_m_csi_last_frame_history = []
 
         # Loop over the epochs.
@@ -352,11 +352,11 @@ class MiniTrainer:
                     config,
                     val_mse_history,
                     val_psnr_history,
-                    val_ssmi_history,
+                    val_ssim_history,
                     val_m_csi_history,
                     val_mse_last_frame_history,
                     val_psnr_last_frame_history,
-                    val_ssmi_last_frame_history,
+                    val_ssim_last_frame_history,
                     val_m_csi_last_frame_history)
 
         # Save the best model according to checkpointing on wandb.
@@ -367,14 +367,14 @@ class MiniTrainer:
             train_mse_history,
             val_mse_history,
             val_psnr_history,
-            val_ssmi_history,
+            val_ssim_history,
             val_m_csi_history)
 
         if self.also_validate_on_last_frame:
             histories += (
                 val_mse_last_frame_history,
                 val_psnr_last_frame_history,
-                val_ssmi_last_frame_history,
+                val_ssim_last_frame_history,
                 val_m_csi_last_frame_history)
         
         return histories
