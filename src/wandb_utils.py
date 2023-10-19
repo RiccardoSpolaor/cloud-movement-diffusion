@@ -70,7 +70,6 @@ def log_images(
 
     plt.figure(figsize=(15, 5))
     plt.subplot(2, 1, 1)
-    print(target_frames.shape)
     plt.imshow(target_frames, cmap='gray')
     plt.title('Sampled Images')
     plt.axis('off')

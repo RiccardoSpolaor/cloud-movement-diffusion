@@ -6,9 +6,11 @@ MODELS:
 
     BASELINE:
 
-    - baseline (1 channel, 3 frames, 1 output)
+    - baseline (1 channel, 3 frames, 1 output) 
+        Baseline.ipynb
 
     - baseline without autoregression (1 channel, 3 frames, 3 outputs)
+        Baseline without autoregression.ipynb
 
     - baseline with autoregression (1 channel, 3 frames, 1 output) * 3
     - baseline with autoregression multichannel (2 channel, 3 frames, 1 output) * 3

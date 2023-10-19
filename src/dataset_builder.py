@@ -9,6 +9,7 @@ import torchvision.transforms as T
 import wandb
 import cv2
 import os
+from scaler import Scaler
 
 # from pathlib import Path
 
@@ -310,7 +311,7 @@ def download_dataset(at_name: str, project_name: str) -> List[str]:
     files = sorted(list(Path(artifact_dir).iterdir()))
     return files #inspect_data(files)
 
-def download_scalers(at_name: str, project_name: str) -> list:
+def download_scalers(at_name: str, project_name: str) -> List[Scaler]:
     """Download the scaler objects from wandb.
 
     Parameters

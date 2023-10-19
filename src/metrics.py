@@ -1,6 +1,9 @@
 from typing import List
 import torch
 from torch import nn
+import numpy as np
+from .scaler import Scaler
+
 
 class mCSI(nn.Module):
     """
@@ -15,8 +18,9 @@ class mCSI(nn.Module):
     """
     def __init__(
         self,
-        thresholds: List[float] = [16., 74., 133.],
-        eps: float = 1e-4
+        thresholds: List[float] = [-42.98, -39.28, -36.34],
+        eps: float = 1e-4,
+        ir069_scaler: Scaler = None,
         ) -> None:
         """
         Initialize the mCSI score.
@@ -30,6 +34,7 @@ class mCSI(nn.Module):
             The epsilon value to avoid division by zero, by default 1e-4.
         """
         super().__init__()
+        thresholds = ir069_scaler.scale(np.array(thresholds)) if ir069_scaler else thresholds
         self.thresholds = thresholds
         self.eps = eps
 

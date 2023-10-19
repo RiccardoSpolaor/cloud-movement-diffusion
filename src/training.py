@@ -14,7 +14,7 @@ from .dataloader import NoisifyDataloader, ValidationDataloader
 from .metrics import mCSI
 from .model import UNet2D, UNet2DTemporalCondition, UNet3D
 from .wandb_utils import log_images, save_model
-
+from .scaler import Scaler
 
 class MiniTrainer:
     """
@@ -48,7 +48,7 @@ class MiniTrainer:
         The number of frames to predict.
     optimizer : Optimizer
         The optimizer to use for training.
-    scheduler : object
+    scheduler : Scaler
         The scheduler to use for training.
         
     Methods
@@ -66,7 +66,7 @@ class MiniTrainer:
         valid_dataloader: ValidationDataloader,
         model: Union[UNet2D, UNet2DTemporalCondition, UNet3D],
         sampler: Callable[[UNet2D, torch.FloatTensor], torch.FloatTensor],
-        ir069_scaler: object,
+        ir069_scaler: Scaler,
         device: str = 'cuda',
         loss_func: nn.Module = nn.MSELoss(),
         n_frames_to_predict: int = 1,
@@ -100,7 +100,7 @@ class MiniTrainer:
         self.loss_func = loss_func
         self.psnr = PeakSignalNoiseRatio().to(device)
         self.ssim = StructuralSimilarityIndexMeasure().to(device)
-        self.m_csi = mCSI().to(device)
+        self.m_csi = mCSI(ir069_scaler=ir069_scaler).to(device)
         self.model = model.to(device)
         self.scaler = torch.cuda.amp.GradScaler()
         self.ir069_scaler = ir069_scaler
@@ -289,7 +289,11 @@ class MiniTrainer:
         self.checkpoint.save_best(
             self.model,
             config.model_name,
-            mse_metric.item())
+            val_mse=mse_metric.item(),
+            val_m_csi=m_csi_metric.item(),
+            val_psnr=psnr_metric.item(),
+            val_ssim=ssim_metric.item(),
+            )
 
     def __prepare(self, config: SimpleNamespace) -> None:
         """
