@@ -40,6 +40,10 @@ class Checkpoint():
         model: Union[WandbModel, nn.Module],
         model_name: str,
         new_error: float,
+        val_mse: float,
+        val_m_csi: float,
+        val_psnr: float,
+        VAL_ssim: float,
         ) -> None:
         """
         Possibly save the best model weights according to the new value of
@@ -57,15 +61,21 @@ class Checkpoint():
             error is less than the lowest one saved so far.
         """
         if new_error < self.lowest_error:
-            # Create the checkpoints
-            # Update the model name with the wandb run id.
-            model_name = f'{wandb.run.id}_{model_name}'
             # Get the models folder.
             models_folder = Path(self.models_folder)
             if not models_folder.exists():
                 models_folder.mkdir()
             # Save the model in the local models folder.
-            torch.save(model.state_dict(), models_folder/f'{model_name}.pth')
+            torch.save(
+                {
+                    'val_mse': val_mse,
+                    'val_m_csi': val_m_csi,
+                    'val_psnr': val_psnr,
+                    'val_ssim': VAL_ssim,
+                    'model_state_dict': model.state_dict(),
+                },
+                models_folder/f'{model_name}.pth'
+                )
 
             # Update the lowest error.
             self.lowest_error = new_error

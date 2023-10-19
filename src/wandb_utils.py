@@ -100,8 +100,6 @@ def save_model(
     model_name : str
         The name of the model.
     """
-    # Update the model name with the wandb run id.
-    model_name = f'{wandb.run.id}_{model_name}'
     # Get the models folder.
     models_folder = Path(models_folder)
     #if not models_folder.exists():

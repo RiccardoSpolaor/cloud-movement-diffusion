@@ -1,0 +1,34 @@
+CLOUD MOVEMENT PREDICTION:
+
+- data retrieval and analysis
+
+MODELS: 
+
+    BASELINE:
+
+    - baseline (1 channel, 3 frames, 1 output)
+
+    - baseline without autoregression (1 channel, 3 frames, 3 outputs)
+
+    - baseline with autoregression (1 channel, 3 frames, 1 output) * 3
+    - baseline with autoregression multichannel (2 channel, 3 frames, 1 output) * 3
+
+
+    GRU:
+
+    - last hidden state (1 channel, 1 frames, 1 output)
+    - 3 hidden states concat (1 channel, 3 frames, 1 output)
+
+    - last hidden state + last frame (1 channel, 2 frames, 1 output)
+    
+    3D UNet:
+
+    - 3D Unet with autoregression (1 channel, 3 frames, 1 output)
+    - 3D Unet without autoregression (1 channel, 3 frames, 3 output)
+
+
+ERROR ANALYSIS:
+
+- mCSI & metrics (all models)
+
+- comparison of different event results (best model)
