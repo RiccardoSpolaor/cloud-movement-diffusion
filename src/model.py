@@ -185,11 +185,14 @@ class UNet3D(nn.Module, WandbModel):
         self,
         *x,
         input_size: Tuple[int, int, int],
-        device: str = "cuda",
+        n_past_frames: int,
+        n_prediction_frames: int,
         **kwargs):
         super().__init__(*x, **kwargs)
         self.unet = SpaceTimeUnet(
             dim = 64,
+            num_input_frames=n_past_frames + n_prediction_frames,
+            num_prediction_frames=n_prediction_frames,
             channels = input_size[0],
             dim_mult = (1, 2, 4, 8),
             temporal_compression = (False, False, False, True),
