@@ -13,19 +13,27 @@ MODELS:
         Baseline without autoregression.ipynb
 
     - baseline with autoregression (1 channel, 3 frames, 1 output) * 3
-    - baseline with autoregression multichannel (2 channel, 3 frames, 1 output) * 3
+        Baseline with autoregression.ipynb
 
+    - baseline with autoregression multichannel (2 channel, 3 frames, 1 output) * 3
+        Baseline with autoregression multichannel.ipynb
 
     GRU:
 
     - last hidden state (1 channel, 1 frames, 1 output)
+        UNet GRU Last Output.ipynb
+
     - 3 hidden states concat (1 channel, 3 frames, 1 output)
+        UNet GRU All Outputs.ipynb
 
     - last hidden state + last frame (1 channel, 2 frames, 1 output)
-    
+        UNet GRU Last Output and Last Frame.ipynb
+
     3D UNet:
 
     - 3D Unet with autoregression (1 channel, 3 frames, 1 output)
+        UNet 3D.ipynb
+        
     - 3D Unet without autoregression (1 channel, 3 frames, 3 output)
 
 
