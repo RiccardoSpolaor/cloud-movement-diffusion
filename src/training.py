@@ -72,8 +72,7 @@ class MiniTrainer:
         n_frames_to_predict: int = 1,
         # TODO: change to auto_regression_steps 
         n_auto_regression_steps: Union[int, None] = 3,
-        channels_per_image: int = 1,
-        also_validate_on_last_frame=False
+        channels_per_image: int = 1
         ) -> None:
         """
         Initializes the MiniTrainer class.
@@ -111,7 +110,6 @@ class MiniTrainer:
         self.n_frames_to_predict = n_frames_to_predict
         self.channels_per_image = channels_per_image
         self.checkpoint = Checkpoint()
-        self.also_validate_on_last_frame = also_validate_on_last_frame
 
     def train_step(self, loss: torch.FloatTensor) -> None:
         """
@@ -188,10 +186,6 @@ class MiniTrainer:
         val_psnr_history: List[Tuple[int, float]],
         val_ssim_history: List[Tuple[int, float]],
         val_m_csi_history: List[Tuple[int, float]],
-        val_mse_last_frame_history: List[Tuple[int, float]],
-        val_psnr_last_frame_history: List[Tuple[int, float]],
-        val_ssim_last_frame_history: List[Tuple[int, float]],
-        val_m_csi_last_frame_history: List[Tuple[int, float]]
         ) -> None:
         # Validation is always done in the first validation loader batch for time purposes.
         past_frames, val_target_frames = self.val_batch[0].to(self.device), self.val_batch[1].to(self.device)
@@ -253,32 +247,6 @@ class MiniTrainer:
         val_ssim_history.append((epoch, ssim_metric.item()))
         val_m_csi_history.append((epoch, m_csi_metric.item()))
 
-        if self.also_validate_on_last_frame:
-            # Compute the metrics on the predicted last frames and the last target frames.
-            psnr_metric_last_frame = self.psnr(predictions[:, -1, 0], val_target_frames[:,-1,0]).float().cpu()
-            ssim_metric_last_frame = self.ssim(predictions[:, -1:, 0], val_target_frames[:,-1,0]).float().cpu()
-            mse_metric_last_frame = self.loss_func(predictions[:, -1, 0], val_target_frames[:,-1,0]).float().cpu()
-            m_csi_metric_last_frame = self.m_csi(predictions[:, -1, 0], val_target_frames[:,-1,0]).float().cpu()
-            
-            # Print the metrics.
-            print(
-                f' val PSNR last frame={psnr_metric_last_frame.item():2.3f},' +\
-                f' val SSIM last frame={ssim_metric_last_frame.item():2.3f},' +\
-                f' val MSE last frame={mse_metric_last_frame.item():2.3f},' +\
-                f' val mCSI last frame={m_csi_metric_last_frame.item():2.3f}')
-
-            # Log the metrics on wandb.
-            wandb.log({
-                'val_psnr_last_frame': psnr_metric_last_frame,
-                'val_ssim_last_frame': ssim_metric_last_frame,
-                'val_mse_last_frame': mse_metric_last_frame,
-                'val_m_csi_last_frame': m_csi_metric_last_frame})
-
-            val_mse_last_frame_history.append((epoch, mse_metric_last_frame.item()))
-            val_psnr_last_frame_history.append((epoch, psnr_metric_last_frame.item()))
-            val_ssim_last_frame_history.append((epoch, ssim_metric_last_frame.item()))
-            val_m_csi_last_frame_history.append((epoch, m_csi_metric_last_frame.item()))
-
         # Plot the predicted and target frames and log them on wandb.
         log_images(
             val_target_frames[0, :, 0],
@@ -335,10 +303,6 @@ class MiniTrainer:
         val_psnr_history = []
         val_ssim_history = []
         val_m_csi_history = []
-        val_mse_last_frame_history = []
-        val_psnr_last_frame_history = []
-        val_ssim_last_frame_history = []
-        val_m_csi_last_frame_history = []
 
         # Loop over the epochs.
         for epoch in progress_bar(range(config.epochs), total=config.epochs, leave=True):
@@ -357,11 +321,7 @@ class MiniTrainer:
                     val_mse_history,
                     val_psnr_history,
                     val_ssim_history,
-                    val_m_csi_history,
-                    val_mse_last_frame_history,
-                    val_psnr_last_frame_history,
-                    val_ssim_last_frame_history,
-                    val_m_csi_last_frame_history)
+                    val_m_csi_history)
 
         # Save the best model according to checkpointing on wandb.
         save_model(config.model_name)
@@ -374,13 +334,6 @@ class MiniTrainer:
             val_ssim_history,
             val_m_csi_history)
 
-        if self.also_validate_on_last_frame:
-            histories += (
-                val_mse_last_frame_history,
-                val_psnr_last_frame_history,
-                val_ssim_last_frame_history,
-                val_m_csi_last_frame_history)
-        
         return histories
 
     def __to_device(
@@ -414,7 +367,7 @@ class MiniTrainer:
     parser = argparse.ArgumentParser(description='Run training baseline')
     for k,v in config.__dict__.items():
         parser.add_argument('--'+k, type=type(v), default=v)
-    args = vars(parser.parse_args())
+    args = vars(parser.parse_argsf())
 
     # update config with parsed args
     for k, v in args.items():
