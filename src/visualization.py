@@ -1,4 +1,4 @@
-from typing import List, Tuple
+from typing import Any, Dict, List, Tuple
 import matplotlib.pyplot as plt
 
 def plot_metrics(
@@ -47,3 +47,77 @@ def plot_metrics(
         plt.legend()
         # Show the plot.
         plt.show()
+
+def plot_model_parameters_vs_m_csi(
+    models_dictionaries: Dict[str, Any]
+    ) -> None:
+    """
+    Plot the model parameters number for the different models
+    along with the validation mCSI.
+
+    Parameters
+    ----------
+    models_dictionaries : { str: Any }
+        The models dictionaries.
+    """
+    plt.figure(figsize=(8, 5))
+    for model, d in models_dictionaries.items():
+        label = model.removeprefix('cloud-diffuser-')
+        label = ' '.join([w.capitalize() for w in label.split('-')])
+        plt.scatter(
+            d['model_parameters'],
+            d['val_m_csi'],
+            s=90,
+            marker='D',
+            label=label,
+            edgecolors='black'
+            )
+    plt.legend(loc='lower right')
+    plt.title('Validation mCSI with respect to Model Parameters Number')
+    plt.ylabel('Valdidation mCSI')
+    plt.tight_layout()
+    plt.xlabel('Model Parameters Number')
+    plt.margins(.2, .2)
+    plt.xscale('log')
+    plt.show()
+    
+def plot_metric(
+    metric: str,
+    metric_label: str,
+    models_dictionaries: Dict[str, Any]
+    ) -> None:
+    """
+    Plot the validation metric for the different models.
+    
+    Parameters
+    ----------
+    metric : str
+        The metric to plot.
+    metric_label : str
+        The metric label.
+    models_dictionaries : { str: Any }
+        The models dictionaries.
+    """
+    plt.figure(figsize=(8, 5))
+    labels = []
+    for i, (model, d) in enumerate(models_dictionaries.items()):
+        label = model.removeprefix('cloud-diffuser-')
+        label = ' '.join([w.capitalize() for w in label.split('-')])
+        labels.append(label)
+        plt.bar(
+            i,
+            height=d[metric],
+            width=.3,
+            edgecolor='black',
+            )
+    plt.title('Validation mCSI comparison for the Different Models')
+    plt.ylabel(f'Valdidation {metric_label}')
+    plt.tight_layout()
+    plt.xlabel('Model Name')
+    plt.margins(.3, .5)
+    plt.xticks(
+        range(len(models_dictionaries)),
+        labels,
+        rotation=45,
+        ha='right')
+    plt.show()

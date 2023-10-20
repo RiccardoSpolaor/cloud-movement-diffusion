@@ -1,5 +1,6 @@
 from pathlib import Path
-from typing import Tuple, Literal
+import random
+from typing import Any, Dict, Tuple, Literal
 
 import wandb
 import fastcore.all as fc
@@ -296,3 +297,38 @@ class UNet2DTemporalCondition(UNet2DModel, WandbModel):
         noise_hidden_state = torch.cat([conv_lstm_features, noisy_frame], dim=1)
 
         return super().forward(noise_hidden_state, timestep=x[1], **kwargs).sample ## Diffusers's UNet2DConditionModel class
+
+def get_model_dictionary(artifact_name: str, project_name: str) -> Dict[str, Any]:
+    """Download a model from wandb and get its values.
+
+    Parameters
+    ----------
+    at_name : str
+        The name of the artifact to download.
+    project_name : str
+        The name of the project to download the artifact from.
+    
+    Returns
+    -------
+    list of str
+        The list of files in the downloaded dataset.
+    """
+    def _get_model(run: Any):
+        artifact_path = f'ai-industry/{project_name}/{artifact_name}'
+        artifact = run.use_artifact(artifact_path, type='model')
+        return artifact.download()
+
+    if wandb.run is not None:
+        run = wandb.run
+        artifact_dir = _get_model(run)
+    else:
+        run = wandb.init(project=project_name, job_type='download_model')
+        artifact_dir = _get_model(run)
+        run.finish()
+    # Get the file name
+    [file_name] = sorted(list(Path(artifact_dir).iterdir()))
+    model_dictionary = torch.load(file_name)
+    if 'model_parameters' not in model_dictionary:
+        # TODO: remove: Set random number of model parameters
+        model_dictionary['model_parameters'] = random.randint(100, 1000)
+    return model_dictionary
