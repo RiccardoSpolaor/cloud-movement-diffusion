@@ -70,6 +70,7 @@ class Checkpoint():
                     'val_psnr': val_psnr,
                     'val_ssim': val_ssim,
                     'model_state_dict': model.state_dict(),
+                    'model_parameters': sum(p.numel() for p in model.parameters())
                 },
                 models_folder/f'{model_name}.pth'
                 )
