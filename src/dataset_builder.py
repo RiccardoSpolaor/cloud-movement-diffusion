@@ -9,7 +9,7 @@ import torchvision.transforms as T
 import wandb
 import cv2
 import os
-from scaler import Scaler
+from .scaler import Scaler
 
 # from pathlib import Path
 
