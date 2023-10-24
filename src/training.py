@@ -72,7 +72,8 @@ class MiniTrainer:
         n_frames_to_predict: int = 1,
         # TODO: change to auto_regression_steps 
         n_auto_regression_steps: Union[int, None] = 3,
-        channels_per_image: int = 1
+        channels_per_image: int = 1,
+        gradient_clipping: bool = False,
         ) -> None:
         """
         Initializes the MiniTrainer class.
@@ -110,6 +111,7 @@ class MiniTrainer:
         self.n_frames_to_predict = n_frames_to_predict
         self.channels_per_image = channels_per_image
         self.checkpoint = Checkpoint()
+        self.gradient_clipping = gradient_clipping
 
     def train_step(self, loss: torch.FloatTensor) -> None:
         """
@@ -168,6 +170,9 @@ class MiniTrainer:
                 loss = self.loss_func(noise, predicted_noise)
             # Apply the training step using the loss.
             self.train_step(loss)
+            # Clip the gradients if gradient clipping is enabled.
+            if self.gradient_clipping:
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1)
             # Log on wandb the loss and the learning rate.
             wandb.log({
                 'train_mse': loss.item(),
