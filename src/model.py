@@ -331,7 +331,5 @@ def get_model_dictionary(artifact_name: str, project_name: str) -> Dict[str, Any
     # Get the file name
     [file_name] = sorted(list(Path(artifact_dir).iterdir()))
     model_dictionary = torch.load(file_name)
-    if 'model_parameters' not in model_dictionary:
-        # TODO: remove: Set random number of model parameters
-        model_dictionary['model_parameters'] = random.randint(100, 1000)
+
     return model_dictionary
