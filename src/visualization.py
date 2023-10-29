@@ -62,17 +62,17 @@ def plot_model_parameters_vs_m_csi(
     """
     plt.figure(figsize=(8, 5))
     for model, d in models_dictionaries.items():
-        label = model.removeprefix('cloud-diffuser-')
-        label = ' '.join([w.capitalize() for w in label.split('-')])
+        #label = model.removeprefix('cloud-diffuser-')
+        #label = ' '.join([w.capitalize() for w in label.split('-')])
         plt.scatter(
             d['model_parameters'],
             d['val_m_csi'],
             s=90,
             marker='D',
-            label=label,
+            label=model,
             edgecolors='black'
             )
-    plt.legend(loc='lower right')
+    plt.legend()
     plt.title('Validation mCSI with respect to Model Parameters Number')
     plt.ylabel('Valdidation mCSI')
     plt.tight_layout()
@@ -101,23 +101,26 @@ def plot_metric(
     plt.figure(figsize=(8, 5))
     labels = []
     for i, (model, d) in enumerate(models_dictionaries.items()):
-        label = model.removeprefix('cloud-diffuser-')
-        label = ' '.join([w.capitalize() for w in label.split('-')])
-        labels.append(label)
+        #label = model.removeprefix('cloud-diffuser-')
+        #label = ' '.join([w.capitalize() for w in label.split('-')])
+        labels.append(model)
         plt.bar(
             i,
             height=d[metric],
-            width=.3,
+            width=.8,
             edgecolor='black',
             )
     plt.title('Validation mCSI comparison for the Different Models')
     plt.ylabel(f'Valdidation {metric_label}')
     plt.tight_layout()
     plt.xlabel('Model Name')
-    plt.margins(.3, .5)
     plt.xticks(
         range(len(models_dictionaries)),
         labels,
         rotation=45,
         ha='right')
+    if metric == 'val_m_csi':
+        plt.ylim(.6, .9)
+    if metric == 'val_ss_ssim':
+        plt.ylim(.4, .9)
     plt.show()
