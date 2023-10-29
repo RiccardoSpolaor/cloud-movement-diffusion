@@ -199,6 +199,8 @@ class MiniTrainer:
                     c,
                     h,
                     w)
+            else:
+                predictions = prediction_frames
         else:
             # Prepare the validation progress bar.
             pbar = progress_bar(range(self.n_auto_regression_steps), leave=True)

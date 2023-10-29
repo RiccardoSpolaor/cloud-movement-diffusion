@@ -32,8 +32,8 @@ MODELS:
     3D UNet:
 
     - 3D Unet with autoregression (1 channel, 3 frames, 1 output)
-        UNet 3D.ipynb
-        
+        UNet 3D with autoregression.ipynb
+
     - 3D Unet without autoregression (1 channel, 3 frames, 3 output)
 
 

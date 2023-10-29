@@ -3,7 +3,7 @@ from typing import Callable, Union
 
 import torch
 from fastprogress import progress_bar
-from diffusers.schedulers import DDIMScheduler
+from diffusers.schedulers import DDPMScheduler
 
 from .model import UNet2D, UNet2DTemporalCondition, UNet3D
 
@@ -11,7 +11,7 @@ from .model import UNet2D, UNet2DTemporalCondition, UNet3D
 def _diffusers_sampler(
     model: Union[UNet2D, UNet2DTemporalCondition, UNet3D],
     past_frames: torch.FloatTensor,
-    sched: DDIMScheduler,
+    sched: DDPMScheduler,
     n_frames_to_predict: int = 1,
     n_channels: int = 1,
     **kwargs
@@ -88,7 +88,7 @@ def ddim_sampler(
         The DDIM sampler function.
     """
     # Create a new DDIM scheduler.
-    ddim_sched = DDIMScheduler()
+    ddim_sched = DDPMScheduler()
     # Set the number of timesteps.
     ddim_sched.set_timesteps(steps)
     # Get the partial function for the diffusers sampler.
