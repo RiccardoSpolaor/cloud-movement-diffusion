@@ -32,7 +32,9 @@ class CloudDataset:
         #scale: bool = True, # if we images to interval [-0.5, 0.5]
         img_size: int = 64, # resize dim, original images are big (446, 780)
         apply_deterministic_transforms: bool = False, # if True, transforms are deterministic
+        event_filter: str = None
         ) -> None:
+        self.event_filter = event_filter
         # Define the transformations to apply to the images.
         if apply_deterministic_transforms:
             transforms = [T.CenterCrop(img_size)]
@@ -96,11 +98,15 @@ class CloudDataset:
         ndarray
             The scaled channel.
         """
-        one_channel = np.load(file_path)
+        one_channel = np.load(file_path, allow_pickle=self.event_filter is not None)
+        if self.event_filter:
+            event_types = one_channel[:, 1]
+            #print(np.unique(event_types))
+            one_channel = np.array([c for c in one_channel[:, 0]])
+            one_channel = one_channel[np.where(event_types == self.event_filter)]
         one_channel = one_channel.astype(np.float32)
         if scaler:
             one_channel = scaler.scale(one_channel)
-            # self._calculate_mean_std(one_channel)
         return one_channel
 
     def create_windows(self, data: np.ndarray, num_frames: int) -> np.ndarray:
