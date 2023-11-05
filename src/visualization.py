@@ -110,8 +110,8 @@ def plot_metric(
             width=.8,
             edgecolor='black',
             )
-    plt.title('Validation mCSI comparison for the Different Models')
-    plt.ylabel(f'Valdidation {metric_label}')
+    plt.title(f'Validation {metric_label} comparison for the Different Models')
+    plt.ylabel(f'Validation {metric_label}')
     plt.tight_layout()
     plt.xlabel('Model Name')
     plt.xticks(
@@ -123,4 +123,44 @@ def plot_metric(
         plt.ylim(.6, .9)
     if metric == 'val_ss_ssim':
         plt.ylim(.4, .9)
+    plt.show()
+
+def plot_metric_on_test_set(
+    metric: str,
+    metric_label: str,
+    events_dictionaries: Dict[str, Any],
+    title: str = None
+    ) -> None:
+    """
+    Plot the test metric for the different events.
+    
+    Parameters
+    ----------
+    metric : str
+        The metric to plot.
+    metric_label : str
+        The metric label.
+    events_dictionaries : { str: Any }
+        The events dictionaries.
+    """
+    if title is None:
+        title = f'Test {metric_label} comparison for the Different Events'
+    plt.figure(figsize=(8, 5))
+    labels = []
+    for i, (event, d) in enumerate(events_dictionaries.items()):
+        labels.append(event)
+        plt.bar(
+            i,
+            height=d[metric],
+            width=.8,
+            edgecolor='black')
+    plt.title(title)
+    plt.ylabel(f'Test {metric_label}')
+    plt.tight_layout()
+    plt.xlabel('Event Kind')
+    plt.xticks(
+        range(len(events_dictionaries)),
+        labels,
+        rotation=45,
+        ha='right')
     plt.show()
