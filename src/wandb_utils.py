@@ -42,7 +42,8 @@ def _scale_images_to_gray(
 def log_images(
     target_frames: torch.FloatTensor,
     predicted_frames: torch.FloatTensor,
-    scaling_values: Optional[Tuple[float, float]] = None
+    scaling_values: Optional[Tuple[float, float]] = None,
+    log_name: str = 'sampled_images'
     ) -> None:
     """
     Log the sampled and predicted images to wandb.
@@ -84,7 +85,7 @@ def log_images(
     predicted_frames = wandb.Image(predicted_frames, caption='Predicted Images')
     # Log the images to wandb.
     wandb.log({
-        'sampled_images': [target_frames, predicted_frames]})
+        log_name: [target_frames, predicted_frames]})
 
 def save_model(
     model_name: str,
