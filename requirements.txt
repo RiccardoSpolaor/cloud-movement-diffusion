@@ -1,0 +1,9 @@
+wandb 
+tqdm 
+matplotlib 
+diffusers 
+fastcore 
+fastprogress 
+torchmetrics 
+einops 
+opencv-python
