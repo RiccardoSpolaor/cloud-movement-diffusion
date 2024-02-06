@@ -1,5 +1,7 @@
+from datetime import time, timedelta
 from typing import Any, Dict, List, Tuple
 import matplotlib.pyplot as plt
+
 
 def plot_metrics(
     train_mse_history: List[Tuple[int, float]],
@@ -123,6 +125,41 @@ def plot_metric(
         plt.ylim(.6, .9)
     if metric == 'val_ss_ssim':
         plt.ylim(.4, .9)
+    plt.show()
+
+def plot_training_time(times_dictionaries: Dict[str, time]) -> None:
+    """
+    Plot the validation metric for the different models.
+    
+    Parameters
+    ----------
+    models_dictionaries : { str: time }
+        The models dictionaries with the training times.
+    """
+    fig = plt.figure(figsize=(8, 5))
+    labels = []
+    for i, (model, v) in enumerate(times_dictionaries.items()):
+        v_in_seconds = (v.hour * 60 + v.minute) * 60 + v.second
+        labels.append(model)
+        plt.bar(
+            i,
+            height=v_in_seconds,
+            width=.8,
+            edgecolor='black',
+            )
+    plt.title('Train time comparison for the Different Models')
+    plt.ylabel('Train time')
+    plt.tight_layout()
+    plt.xlabel('Model Name')
+    plt.xticks(
+        range(len(times_dictionaries)),
+        labels,
+        rotation=45,
+        ha='right')
+    # Set ticklabels in hours, minutes and seconds.
+    fig.axes[0].yaxis.set_ticklabels(
+        [str(timedelta(seconds=int(i))) for i in fig.axes[0].get_yticks()])
+    #fig.axes[0].yaxis.set_major_formatter(mdates.DateFormatter('%H:%M:%S'))
     plt.show()
 
 def plot_metric_on_test_set(
